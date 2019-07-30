@@ -13,7 +13,8 @@ import Servant.OpenUnion
 
 
 {- | An alternative to 'Verb' for end-points that respond with a resource value of any of an
-open union of types, and specific status codes for each type in this union.
+open union of types, and specific status codes for each type in this union.  (`UVerb` is short
+for `UnionVerb`)
 
 This can be used for returning (rather than throwing) exceptions in a server as in, say
 @'[Report, WaiError]@; or responding with either a 303 forward with a location header, or 201
