@@ -22,10 +22,10 @@ source-repository head
 library
   hs-source-dirs:      src
   exposed-modules:     Servant.UVerb.Server
-                       
+
 
   build-depends:       base ^>= 4.12.0.0
-                     
+
 
   ghc-options:         -Wall
                        -Wincomplete-uni-patterns
@@ -39,16 +39,24 @@ library
 
   default-language:    Haskell2010
   default-extensions:  ConstraintKinds
+                       AllowAmbiguousTypes
+                       DeriveFunctor
                        DeriveGeneric
+                       DerivingVia
+                       DuplicateRecordFields
+                       FlexibleContexts
+                       GeneralizedNewtypeDeriving
                        InstanceSigs
                        KindSignatures
                        LambdaCase
                        OverloadedStrings
+                       RankNTypes
                        RecordWildCards
                        ScopedTypeVariables
                        StandaloneDeriving
                        TupleSections
                        TypeApplications
+                       UndecidableInstances
                        ViewPatterns
 
 test-suite servant-uverb-test
@@ -58,7 +66,7 @@ test-suite servant-uverb-test
 
   build-depends:       base ^>= 4.12.0.0
                      , servant-uverb
-                     
+
 
   ghc-options:         -Wall
                        -threaded
@@ -75,15 +83,22 @@ test-suite servant-uverb-test
 
   default-language:    Haskell2010
   default-extensions:  ConstraintKinds
+                       AllowAmbiguousTypes
+                       DeriveFunctor
                        DeriveGeneric
+                       DerivingVia
+                       DuplicateRecordFields
+                       FlexibleContexts
+                       GeneralizedNewtypeDeriving
                        InstanceSigs
                        KindSignatures
                        LambdaCase
                        OverloadedStrings
+                       RankNTypes
                        RecordWildCards
                        ScopedTypeVariables
                        StandaloneDeriving
                        TupleSections
                        TypeApplications
+                       UndecidableInstances
                        ViewPatterns
-
