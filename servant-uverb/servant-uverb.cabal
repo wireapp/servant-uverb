@@ -12,7 +12,7 @@ maintainer:          backend@wire.com
 copyright:           (c) 2017 Wire Swiss GmbH
 category:            Web
 build-type:          Simple
-extra-doc-files:     README.md, CHANGELOG.md
+extra-doc-files:     ../README.md, ../CHANGELOG.md
 tested-with:         GHC == 8.6.4
 
 source-repository head
@@ -21,11 +21,13 @@ source-repository head
 
 library
   hs-source-dirs:      src
-  exposed-modules:     Servant.UVerb
+  exposed-modules:     Servant.UVerb,
+                       Servant.OpenUnion
 
-
-  build-depends:       base ^>= 4.12.0.0
-
+  build-depends:       base ^>= 4.12.0.0,
+                       http-types >= 0.12.3,
+                       servant >= 0.14,
+                       sop-core >= 0.4.0.0
 
   ghc-options:         -Wall
                        -Wincomplete-uni-patterns
@@ -40,22 +42,28 @@ library
   default-language:    Haskell2010
   default-extensions:  ConstraintKinds
                        AllowAmbiguousTypes
+                       DataKinds
                        DeriveFunctor
                        DeriveGeneric
                        DerivingVia
                        DuplicateRecordFields
                        FlexibleContexts
+                       FlexibleInstances
                        GeneralizedNewtypeDeriving
                        InstanceSigs
                        KindSignatures
                        LambdaCase
+                       MultiParamTypeClasses
                        OverloadedStrings
+                       PolyKinds
                        RankNTypes
                        RecordWildCards
                        ScopedTypeVariables
                        StandaloneDeriving
                        TupleSections
                        TypeApplications
+                       TypeFamilies
+                       TypeOperators
                        UndecidableInstances
                        ViewPatterns
 
@@ -66,7 +74,6 @@ test-suite servant-uverb-test
 
   build-depends:       base ^>= 4.12.0.0
                      , servant-uverb
-
 
   ghc-options:         -Wall
                        -threaded
@@ -84,6 +91,7 @@ test-suite servant-uverb-test
   default-language:    Haskell2010
   default-extensions:  ConstraintKinds
                        AllowAmbiguousTypes
+                       DataKinds
                        DeriveFunctor
                        DeriveGeneric
                        DerivingVia
@@ -94,11 +102,13 @@ test-suite servant-uverb-test
                        KindSignatures
                        LambdaCase
                        OverloadedStrings
+                       PolyKinds
                        RankNTypes
                        RecordWildCards
                        ScopedTypeVariables
                        StandaloneDeriving
                        TupleSections
                        TypeApplications
+                       TypeOperators
                        UndecidableInstances
                        ViewPatterns

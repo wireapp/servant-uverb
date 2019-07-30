@@ -12,7 +12,7 @@ maintainer:          backend@wire.com
 copyright:           (c) 2017 Wire Swiss GmbH
 category:            Web
 build-type:          Simple
-extra-doc-files:     README.md, CHANGELOG.md
+extra-doc-files:     ../README.md, ../CHANGELOG.md
 tested-with:         GHC == 8.6.4
 
 source-repository head
@@ -40,6 +40,7 @@ library
   default-language:    Haskell2010
   default-extensions:  ConstraintKinds
                        AllowAmbiguousTypes
+                       DataKinds
                        DeriveFunctor
                        DeriveGeneric
                        DerivingVia
@@ -50,12 +51,14 @@ library
                        KindSignatures
                        LambdaCase
                        OverloadedStrings
+                       PolyKinds
                        RankNTypes
                        RecordWildCards
                        ScopedTypeVariables
                        StandaloneDeriving
                        TupleSections
                        TypeApplications
+                       TypeOperators
                        UndecidableInstances
                        ViewPatterns
 
@@ -84,6 +87,7 @@ test-suite servant-uverb-test
   default-language:    Haskell2010
   default-extensions:  ConstraintKinds
                        AllowAmbiguousTypes
+                       DataKinds
                        DeriveFunctor
                        DeriveGeneric
                        DerivingVia
@@ -94,11 +98,13 @@ test-suite servant-uverb-test
                        KindSignatures
                        LambdaCase
                        OverloadedStrings
+                       PolyKinds
                        RankNTypes
                        RecordWildCards
                        ScopedTypeVariables
                        StandaloneDeriving
                        TupleSections
                        TypeApplications
+                       TypeOperators
                        UndecidableInstances
                        ViewPatterns
