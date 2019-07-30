@@ -1,4 +1,4 @@
-module ServantUverb
+module Servant.UVerb.Server
        ( someFunc
        ) where
 
