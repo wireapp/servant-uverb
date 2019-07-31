@@ -62,13 +62,13 @@ library
   import:              standard-things
   hs-source-dirs:      src
   exposed-modules:     Servant.Server.UVerb
-  build-depends:       http-types >= 0.12.3,
-                       servant >= 0.14,
-                       servant-server >= 0.14,
+  build-depends:       http-types ^>= 0.12.3,
+                       servant ^>= 0.14,
+                       servant-server ^>= 0.14,
                        servant-uverb == 0.0.1,
-                       sop-core >= 0.4.0.0,
-                       string-conversions >= 0.4.0.1,
-                       wai >= 3.2.2
+                       sop-core ^>= 0.4.0.0,
+                       string-conversions ^>= 0.4.0.1,
+                       wai ^>= 3.2.2
 
 test-suite servant-uverb-test
   import:              standard-things
