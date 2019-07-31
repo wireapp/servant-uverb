@@ -1,4 +1,4 @@
-cabal-version:       2.0
+cabal-version:       2.2
 name:                servant-uverb-server
 version:             0.0.1
 synopsis:            See README for more info
@@ -19,12 +19,47 @@ source-repository head
   type:                git
   location:            https://github.com/wireapp/servant-uverb.git
 
+common standard-things 
+  build-depends:        base ^>= 4.12.0.0
+  ghc-options:         -Wall
+                       -Wincomplete-uni-patterns
+                       -Wincomplete-record-updates
+                       -Wcompat
+                       -Widentities
+                       -Wredundant-constraints
+                       -fhide-source-paths
+                       -Wmissing-export-lists
+                       -Wpartial-fields
+  default-language:    Haskell2010
+  default-extensions:  ConstraintKinds
+                       DataKinds
+                       DeriveFunctor
+                       DeriveGeneric
+                       DerivingStrategies
+                       DerivingVia
+                       DuplicateRecordFields
+                       FlexibleContexts
+                       GeneralizedNewtypeDeriving
+                       InstanceSigs
+                       KindSignatures
+                       LambdaCase
+                       OverloadedStrings
+                       PolyKinds
+                       RankNTypes
+                       RecordWildCards
+                       ScopedTypeVariables
+                       StandaloneDeriving
+                       TupleSections
+                       TypeApplications
+                       TypeOperators
+                       UndecidableInstances
+                       ViewPatterns
+
 library
+  import:              standard-things
   hs-source-dirs:      src
   exposed-modules:     Servant.UVerb.Server
-
-  build-depends:       base ^>= 4.12.0.0,
-                       http-types >= 0.12.3,
+  build-depends:       http-types >= 0.12.3,
                        servant >= 0.14,
                        servant-server >= 0.14,
                        servant-uverb == 0.0.1,
@@ -32,86 +67,13 @@ library
                        string-conversions >= 0.4.0.1,
                        wai >= 3.2.2
 
-  ghc-options:         -Wall
-                       -Wincomplete-uni-patterns
-                       -Wincomplete-record-updates
-                       -Wcompat
-                       -Widentities
-                       -Wredundant-constraints
-                       -fhide-source-paths
-                       -Wmissing-export-lists
-                       -Wpartial-fields
-
-  default-language:    Haskell2010
-  default-extensions:  ConstraintKinds
-                       AllowAmbiguousTypes
-                       DataKinds
-                       DeriveFunctor
-                       DeriveGeneric
-                       DerivingVia
-                       DuplicateRecordFields
-                       FlexibleContexts
-                       FlexibleInstances
-                       GeneralizedNewtypeDeriving
-                       InstanceSigs
-                       KindSignatures
-                       LambdaCase
-                       MultiParamTypeClasses
-                       OverloadedStrings
-                       PolyKinds
-                       RankNTypes
-                       RecordWildCards
-                       ScopedTypeVariables
-                       StandaloneDeriving
-                       TupleSections
-                       TypeApplications
-                       TypeFamilies
-                       TypeOperators
-                       UndecidableInstances
-                       ViewPatterns
-
 test-suite servant-uverb-test
+  import:              standard-things
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             Spec.hs
-
-  build-depends:       base ^>= 4.12.0.0
-                     , servant-uverb
-
-  ghc-options:         -Wall
-                       -threaded
+  build-depends:       servant-uverb
+  ghc-options:         -threaded
                        -rtsopts
                        -with-rtsopts=-N
-                       -Wincomplete-uni-patterns
-                       -Wincomplete-record-updates
-                       -Wcompat
-                       -Widentities
-                       -Wredundant-constraints
-                       -fhide-source-paths
-                       -Wmissing-export-lists
-                       -Wpartial-fields
 
-  default-language:    Haskell2010
-  default-extensions:  ConstraintKinds
-                       AllowAmbiguousTypes
-                       DataKinds
-                       DeriveFunctor
-                       DeriveGeneric
-                       DerivingVia
-                       DuplicateRecordFields
-                       FlexibleContexts
-                       GeneralizedNewtypeDeriving
-                       InstanceSigs
-                       KindSignatures
-                       LambdaCase
-                       OverloadedStrings
-                       PolyKinds
-                       RankNTypes
-                       RecordWildCards
-                       ScopedTypeVariables
-                       StandaloneDeriving
-                       TupleSections
-                       TypeApplications
-                       TypeOperators
-                       UndecidableInstances
-                       ViewPatterns

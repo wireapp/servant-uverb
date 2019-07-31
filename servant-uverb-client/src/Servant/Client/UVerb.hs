@@ -1,4 +1,4 @@
-module Servant.UVerb.Swagger
+module Servant.Client.UVerb
        ( someFunc
        ) where
 
