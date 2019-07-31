@@ -1,5 +1,5 @@
 -- | Type-level code for implementing and using 'UVerb'.
-module Servant.UVerb.OpenUnion where
+module Servant.API.UVerb.OpenUnion where
 
 import Data.SOP.Constraint
 import Data.SOP.NS

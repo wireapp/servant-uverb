@@ -5,7 +5,7 @@ synopsis:            See README for more info
 description:         See README for more info
 homepage:            https://github.com/wireapp/servant-uverb
 bug-reports:         https://github.com/wireapp/servant-uverb/issues
-license:             AGPL-3
+license:             AGPL-3.0-only
 license-file:        LICENSE
 author:              Arian van Putten, Matthias Fischmann
 maintainer:          backend@wire.com
@@ -39,10 +39,12 @@ common standard-things
                        DerivingVia
                        DuplicateRecordFields
                        FlexibleContexts
+                       FlexibleInstances
                        GeneralizedNewtypeDeriving
                        InstanceSigs
                        KindSignatures
                        LambdaCase
+                       MultiParamTypeClasses
                        OverloadedStrings
                        PolyKinds
                        RankNTypes
@@ -52,6 +54,7 @@ common standard-things
                        TupleSections
                        TypeApplications
                        TypeOperators
+                       TypeFamilies
                        UndecidableInstances
                        ViewPatterns
 

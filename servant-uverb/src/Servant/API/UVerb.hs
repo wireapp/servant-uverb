@@ -1,15 +1,15 @@
-module Servant.UVerb
+module Servant.API.UVerb
   ( UVerb
   , HasStatus, getStatus
   , MakesResource, mkResource
   , MakesUVerb
-  , module Servant.UVerb.OpenUnion
+  , module Servant.API.UVerb.OpenUnion
   ) where
 
 import Data.SOP.Constraint
 import Network.HTTP.Types (Status)
 import Servant.API (StdMethod)
-import Servant.UVerb.OpenUnion
+import Servant.API.UVerb.OpenUnion
 
 
 {- | An alternative to 'Verb' for end-points that respond with a resource value of any of an
