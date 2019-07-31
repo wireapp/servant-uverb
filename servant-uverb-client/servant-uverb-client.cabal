@@ -20,7 +20,7 @@ source-repository head
   location:            https://github.com/wireapp/servant-uverb.git
 
 common standard-things 
-  build-depends:        base ^>= 4.12.0.0
+  build-depends:       base ^>= 4.12.0.0
   ghc-options:         -Wall
                        -Wincomplete-uni-patterns
                        -Wincomplete-record-updates
@@ -58,6 +58,7 @@ common standard-things
 library
   import:              standard-things
   hs-source-dirs:      src
+  build-depends:       servant-uverb == 0.0.1
   exposed-modules:     Servant.Client.UVerb
 
 test-suite servant-uverb-test
@@ -65,7 +66,7 @@ test-suite servant-uverb-test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             Spec.hs
-  build-depends:       servant-uverb
+  build-depends:       servant-uverb-client
   ghc-options:         -threaded
                        -rtsopts
                        -with-rtsopts=-N
