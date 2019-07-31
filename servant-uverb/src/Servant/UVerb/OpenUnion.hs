@@ -45,11 +45,19 @@ instance ( RIndex a (b ': as) ~ ('S_ i) , UElem a as i) => UElem a (b ': as) ('S
     Z _ -> Nothing
     S z -> match z
 
+type family Nubbed xs :: Bool where
+  Nubbed '[] = 'True
+  Nubbed (x ': xs) = If (Elem x xs) (Nubbed xs) 'False
 
--- | Check whether @a@ is in list.
+-- | Check whether @a@ is in list.  This will throw nice errors if the element is not in the
+-- list, or if there is a duplicate in the list.
 type family CheckElemIsMember (a :: k) (as :: [k]) :: Constraint where
     CheckElemIsMember a as =
-      If (Elem a as) (() :: Constraint) (TypeError (NoElementError a as))
+      If (Elem a as)
+        (If (Nubbed as)
+          (() :: Constraint)
+          (TypeError (DuplicateElementError as)))
+        (TypeError (NoElementError a as))
 
 type NoElementError (r :: k) (rs :: [k]) =
           'Text "Expected one of:"
@@ -57,16 +65,6 @@ type NoElementError (r :: k) (rs :: [k]) =
     ':$$: 'Text "But got:"
     ':$$: 'Text "    " ':<>: 'ShowType r
 
-
--- * Stolen from "Servant.Swagger.Internal.TypeLevel.API"
-
--- | Remove duplicates from a type-level list.
-type family Nub xs where
-  Nub '[] = '[]
-  Nub (x ': xs) = x ': Nub (Remove x xs)
-
--- | Remove element from a type-level list.
-type family Remove x xs where
-  Remove x '[]       = '[]
-  Remove x (x ': ys) =      Remove x ys
-  Remove x (y ': ys) = y ': Remove x ys
+type DuplicateElementError (rs :: [k]) =
+          'Text "Duplicate element in list:"
+    ':$$: 'Text "    " ':<>: 'ShowType rs
