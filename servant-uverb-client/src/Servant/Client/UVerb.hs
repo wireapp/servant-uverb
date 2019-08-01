@@ -15,7 +15,6 @@ class CanParse a where
   -- TODO this must become :: Request -> Either String a, but lets have some imagination and
   -- think Request is pre-applied already
   parser :: Either String a
-  
 
 instance CanParse Int where
   parser = Left "Alas I didnt parse this Int"
@@ -27,6 +26,8 @@ instance CanParse Char where
   parser = Right 'c'
 
 -- given a list of types that are parseable, give a list of parsers. one for each type
+-- In the future this will turn a list of types of our API types into a list of parsers
+-- using  AllCTUnrender
 makeParsers :: All CanParse xs => Proxy xs -> NP (Either String) xs
 makeParsers Proxy = cpure_NP (Proxy @CanParse) parser
 
