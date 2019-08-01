@@ -1,11 +1,11 @@
-cabal-version:       2.0
+cabal-version:       2.2
 name:                servant-uverb
 version:             0.0.1
 synopsis:            See README for more info
 description:         See README for more info
 homepage:            https://github.com/wireapp/servant-uverb
 bug-reports:         https://github.com/wireapp/servant-uverb/issues
-license:             AGPL-3
+license:             AGPL-3.0-only
 license-file:        LICENSE
 author:              Arian van Putten, Matthias Fischmann
 maintainer:          backend@wire.com
@@ -19,16 +19,8 @@ source-repository head
   type:                git
   location:            https://github.com/wireapp/servant-uverb.git
 
-library
-  hs-source-dirs:      src
-  exposed-modules:     Servant.UVerb,
-                       Servant.UVerb.OpenUnion
-
-  build-depends:       base ^>= 4.12.0.0,
-                       http-types >= 0.12.3,
-                       servant >= 0.14,
-                       sop-core >= 0.4.0.0
-
+common standard-things 
+  build-depends:       base ^>= 4.12.0.0
   ghc-options:         -Wall
                        -Wincomplete-uni-patterns
                        -Wincomplete-record-updates
@@ -38,13 +30,12 @@ library
                        -fhide-source-paths
                        -Wmissing-export-lists
                        -Wpartial-fields
-
   default-language:    Haskell2010
   default-extensions:  ConstraintKinds
-                       AllowAmbiguousTypes
                        DataKinds
                        DeriveFunctor
                        DeriveGeneric
+                       DerivingStrategies
                        DerivingVia
                        DuplicateRecordFields
                        FlexibleContexts
@@ -62,53 +53,28 @@ library
                        StandaloneDeriving
                        TupleSections
                        TypeApplications
-                       TypeFamilies
                        TypeOperators
+                       TypeFamilies
                        UndecidableInstances
                        ViewPatterns
 
+library
+  import:              standard-things
+  hs-source-dirs:      src
+  exposed-modules:     Servant.API.UVerb,
+                       Servant.API.UVerb.OpenUnion
+
+  build-depends:       http-types ^>= 0.12.3,
+                       servant ^>= 0.14,
+                       sop-core ^>= 0.4.0.0
+
 test-suite servant-uverb-test
+  import:              standard-things
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             Spec.hs
-
-  build-depends:       base ^>= 4.12.0.0
-                     , servant-uverb
-
+  build-depends:       servant-uverb
   ghc-options:         -Wall
                        -threaded
                        -rtsopts
                        -with-rtsopts=-N
-                       -Wincomplete-uni-patterns
-                       -Wincomplete-record-updates
-                       -Wcompat
-                       -Widentities
-                       -Wredundant-constraints
-                       -fhide-source-paths
-                       -Wmissing-export-lists
-                       -Wpartial-fields
-
-  default-language:    Haskell2010
-  default-extensions:  ConstraintKinds
-                       AllowAmbiguousTypes
-                       DataKinds
-                       DeriveFunctor
-                       DeriveGeneric
-                       DerivingVia
-                       DuplicateRecordFields
-                       FlexibleContexts
-                       GeneralizedNewtypeDeriving
-                       InstanceSigs
-                       KindSignatures
-                       LambdaCase
-                       OverloadedStrings
-                       PolyKinds
-                       RankNTypes
-                       RecordWildCards
-                       ScopedTypeVariables
-                       StandaloneDeriving
-                       TupleSections
-                       TypeApplications
-                       TypeOperators
-                       UndecidableInstances
-                       ViewPatterns

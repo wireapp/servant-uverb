@@ -1,4 +1,4 @@
-module Servant.UVerb.Server where
+module Servant.Server.UVerb where
 
 import Data.Maybe (fromMaybe)
 import Data.Proxy
@@ -12,7 +12,7 @@ import Servant.API.ContentTypes
 import Servant.API.ContentTypes (AcceptHeader (..), AllCTRender (..))
 import Servant (ReflectMethod, reflectMethod)
 import Servant.Server.Internal
-import Servant.UVerb
+import Servant.API.UVerb
 
 
 -- | Helper constraint used in @instance 'HasServer' 'UVerb'@.
