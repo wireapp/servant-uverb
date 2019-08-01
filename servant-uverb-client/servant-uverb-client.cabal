@@ -39,10 +39,12 @@ common standard-things
                        DerivingVia
                        DuplicateRecordFields
                        FlexibleContexts
+                       FlexibleInstances
                        GeneralizedNewtypeDeriving
                        InstanceSigs
                        KindSignatures
                        LambdaCase
+                       MultiParamTypeClasses
                        OverloadedStrings
                        PolyKinds
                        RankNTypes
@@ -51,6 +53,7 @@ common standard-things
                        StandaloneDeriving
                        TupleSections
                        TypeApplications
+                       TypeFamilies
                        TypeOperators
                        UndecidableInstances
                        ViewPatterns
@@ -58,7 +61,9 @@ common standard-things
 library
   import:              standard-things
   hs-source-dirs:      src
-  build-depends:       servant-uverb == 0.0.1
+  build-depends:       servant-uverb == 0.0.1,
+                       servant-client-core ^>= 0.14,
+                       sop-core ^>= 0.4.0.0
   exposed-modules:     Servant.Client.UVerb
 
 test-suite servant-uverb-test
