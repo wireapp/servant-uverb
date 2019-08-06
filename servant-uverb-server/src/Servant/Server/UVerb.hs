@@ -18,10 +18,9 @@ import Servant.API.UVerb
 
 -- | Helper constraint used in @instance 'HasServer' 'UVerb'@.
 type IsResource cts mkres =
-  ( Compose (AllCTRender cts) mkres `And`
+  Compose (AllCTRender cts) mkres `And`
     HasStatus mkres `And`
     MakesResource mkres
-  )
 
 instance
   ( ReflectMethod method
