@@ -33,8 +33,6 @@ type IsResource ct mkres =
   
 
 -- | Given a list of types, parses the given response body as each type
---
--- TODO should return an NP (Either String 
 mimeUnrenders 
   :: forall mkres ct xs . All (IsResource ct mkres) xs 
   => ByteString -> NP (Either String :.: mkres) xs
