@@ -58,8 +58,8 @@ instance
     response <- runRequest request { requestMethod = method, requestAccept = accept }
     let status = responseStatusCode response
     let body = responseBody response
-    let resp = pickFirstParse . apInjs_NP . mimeUnrenders (Proxy @mkres) (Proxy @ct) (Proxy @resources) $ body
-    case resp of
+    let parsersOf = apInjs_NP . mimeUnrenders (Proxy @mkres) (Proxy @ct) (Proxy @resources)
+    case pickFirstParse . parsersOf $ body of
       Left x -> error x -- TODO we need to do better here. See servant-client-core source code :) But we're close!
       Right x -> return x
 
