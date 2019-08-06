@@ -1,10 +1,12 @@
 module Servant.Client.UVerb () where
 
+import Data.ByteString.Lazy (ByteString)
 import Data.Proxy
-import Data.SOP.NS
 import Data.SOP.NP
+import Data.SOP.NS
 import qualified Data.Sequence as Seq
 import Data.SOP.Constraint
+import Data.SOP.Classes (HSequence(hsequence'))
 import Data.SOP.BasicFunctors
 import Servant.Client.Core
 import Servant.API.ContentTypes
@@ -13,54 +15,14 @@ import Data.Foldable (toList)
 
 import Servant.API.UVerb
 
--- This will be the AllCTUnrender thing in Servant. This is just here to experiment here.
--- The hard part the the sop-core stuff, not the servant stuff
-class CanParse a where
-  -- TODO this must become :: Request -> Either String a, but lets have some imagination and
-  -- think Request is pre-applied already
-  parser :: Either String a
 
-instance CanParse Int where
-  parser = Left "Alas I didnt parse this Int"
-
-instance CanParse String where
-  parser = Left "Alas I didnt parse this String"
-
-instance CanParse Char where
-  parser = Right 'c'
-
--- given a list of types that are parseable, give a list of parsers. one for each type
--- In the future this will turn a list of types of our API types into a list of parsers
--- using  AllCTUnrender
-makeParsers :: All CanParse xs => Proxy xs -> NP (Either String) xs
-makeParsers Proxy = cpure_NP (Proxy @CanParse) parser
-
--- now we have a list of parsers
-parsers :: forall xs. xs ~ '[Int, String, Char] => NP (Either String) xs
-parsers = makeParsers (Proxy @xs)
-
--- turn a list of parsers into a list of sums of parsers
-test :: [NS (Either String) '[Int, String, Char]]
-test = apInjs_NP parsers
-
---- pick the first thing that parses
-test2 :: Either String (NS I '[Int, String, Char])
-test2 = pickFirstParse test
-
--- FUTUREWORK: something along this lines probably already exists for some good choice of f, f', g
--- e.g. traverse'_NS :: forall xs f f' g. (SListI xs, Functor g) => (forall a. f a -> g (f' a)) -> NS f xs -> g (NS f' xs) 
--- has a very similar type
---
--- Fun one for @fisx
-transformIfItSucceeded :: NS (Either String) xs -> Either String (NS I xs)
-transformIfItSucceeded (Z (Left x)) = Left x
-transformIfItSucceeded (Z (Right y)) = Right (Z (I y))
-transformIfItSucceeded (S y) = S <$> transformIfItSucceeded y
+transformIfItSucceeded :: NS (Either String :.: mkres) xs -> Either String (NS mkres xs)
+transformIfItSucceeded = sequence'_NS
 
 
 
 -- FUTUREWORK: Use  The Validation semigroup here so we can collect all the error messages
-pickFirstParse :: [(NS (Either String)) xs] -> Either String (NS I xs)
+pickFirstParse :: [(NS (Either String :.: mkres)) xs] -> Either String (NS mkres xs)
 pickFirstParse [] = Left "none of them parsed"
 pickFirstParse (x : xs) =
     case transformIfItSucceeded x of
@@ -74,8 +36,13 @@ type IsResource ct mkres =
     MakesResource mkres
   )
 
-makeParsers :: All MimeUnrender xs => Proxy xs -> NP (Either String) xs
-makeParsers Proxy = cpure_NP (Proxy @CanParse) parser
+-- | Given a list of types, parses the given response body as each type
+--
+-- TODO should return an NP (Either String 
+mimeUnrenders 
+  :: forall ct xs mkres. All (IsResource ct mkres) xs 
+  => Proxy mkres -> Proxy ct -> Proxy xs -> ByteString -> NP (Either String :.: mkres) xs
+mimeUnrenders mkres ct xs body = cpure_NP (Proxy @(IsResource ct mkres)) (Comp $ mimeUnrender ct body)
 
 -- We are the client, so we're free to pick whatever content type we like!
 -- we'll pick the first one
@@ -91,16 +58,14 @@ instance
   type Client m (UVerb mkres method cts resources) = m (NS mkres resources)
 
   clientWithRoute Proxy Proxy request = do
-    let accept = Seq.fromList $ toList $ contentTypes (Proxy @ct)
-    let method = reflectMethod (Proxy @method)
+    let accept = Seq.fromList . toList . contentTypes $ Proxy @ct
+    let method = reflectMethod $ Proxy @method
     response <- runRequest request { requestMethod = method, requestAccept = accept }
     let status = responseStatusCode response
     let body = responseBody response
-    -- now for each resource, we should try parsing it.
-    -- we can be smart and use the status to decide whether to parse at all
-
-
-
-    undefined
+    let resp = pickFirstParse . apInjs_NP . mimeUnrenders (Proxy @mkres) (Proxy @ct) (Proxy @resources) $ body
+    case resp of
+      Left x -> error x -- TODO we need to do better here. See servant-client-core source code :) But we're close!
+      Right x -> return x
 
   hoistClientMonad Proxy Proxy nt s = nt s
