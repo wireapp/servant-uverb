@@ -65,7 +65,8 @@ library
                        servant-client-core ^>= 0.14,
                        servant ^>= 0.14,
                        containers ^>= 0.6,
-                       sop-core ^>= 0.4.0.0
+                       sop-core ^>= 0.4.0.0,
+                       bytestring ^>= 0.10,
   exposed-modules:     Servant.Client.UVerb
 
 test-suite servant-uverb-test
