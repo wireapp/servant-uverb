@@ -1,3 +1,4 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 module Servant.Client.UVerb () where
 
 import Data.ByteString.Lazy (ByteString)
@@ -18,7 +19,7 @@ import Servant.API.UVerb
 -- FUTUREWORK: Use  The Validation semigroup here so we can collect all the error messages
 pickFirstParse :: [(NS (Either String :.: mkres)) xs] -> Either String (NS mkres xs)
 pickFirstParse [] = Left "none of them parsed"
-pickFirstParse (x : xs) =
+pickFurstParse (x : xs) =
   case sequence'_NS x of
     Left x -> pickFirstParse xs
     Right y -> Right y
@@ -35,9 +36,9 @@ type IsResource ct mkres =
 --
 -- TODO should return an NP (Either String 
 mimeUnrenders 
-  :: forall ct xs mkres. All (IsResource ct mkres) xs 
-  => Proxy mkres -> Proxy ct -> Proxy xs -> ByteString -> NP (Either String :.: mkres) xs
-mimeUnrenders mkres ct xs body = cpure_NP (Proxy @(IsResource ct mkres)) (Comp $ mimeUnrender ct body)
+  :: forall mkres ct xs . All (IsResource ct mkres) xs 
+  => ByteString -> NP (Either String :.: mkres) xs
+mimeUnrenders body = cpure_NP (Proxy @(IsResource ct mkres)) (Comp $ mimeUnrender (Proxy @ct) body)
 
 -- We are the client, so we're free to pick whatever content type we like!
 -- we'll pick the first one
@@ -58,7 +59,7 @@ instance
     response <- runRequest request { requestMethod = method, requestAccept = accept }
     let status = responseStatusCode response
     let body = responseBody response
-    let parsersOf = apInjs_NP . mimeUnrenders (Proxy @mkres) (Proxy @ct) (Proxy @resources)
+    let parsersOf = apInjs_NP . mimeUnrenders @mkres @ct @resources
     case pickFirstParse . parsersOf $ body of
       Left x -> error x -- TODO we need to do better here. See servant-client-core source code :) But we're close!
       Right x -> return x
