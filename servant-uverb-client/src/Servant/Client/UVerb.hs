@@ -2,19 +2,19 @@
 module Servant.Client.UVerb () where
 
 import Data.ByteString.Lazy (ByteString)
+import Data.Foldable (toList)
 import Data.Proxy
+import Data.SOP.BasicFunctors
+import Data.SOP.Classes (HSequence(hsequence'))
+import Data.SOP.Constraint
 import Data.SOP.NP
 import Data.SOP.NS
-import qualified Data.Sequence as Seq
-import Data.SOP.Constraint
-import Data.SOP.Classes (HSequence(hsequence'))
-import Data.SOP.BasicFunctors
-import Servant.Client.Core
 import Servant.API.ContentTypes
 import Servant.API (ReflectMethod(reflectMethod))
-import Data.Foldable (toList)
-
 import Servant.API.UVerb
+import Servant.Client.Core
+
+import qualified Data.Sequence as Seq
 
 -- FUTUREWORK: Use  The Validation semigroup here so we can collect all the error messages
 pickFirstParse :: [(NS (Either String :.: mkres)) xs] -> Either String (NS mkres xs)
@@ -30,7 +30,6 @@ type IsResource ct mkres =
   Compose (MimeUnrender ct) mkres `And`
     HasStatus mkres `And`
     MakesResource mkres
-  
 
 -- | Given a list of types, parses the given response body as each type
 mimeUnrenders 
