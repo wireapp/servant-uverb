@@ -15,26 +15,21 @@ import Data.Foldable (toList)
 
 import Servant.API.UVerb
 
-
-transformIfItSucceeded :: NS (Either String :.: mkres) xs -> Either String (NS mkres xs)
-transformIfItSucceeded = sequence'_NS
-
-
-
 -- FUTUREWORK: Use  The Validation semigroup here so we can collect all the error messages
 pickFirstParse :: [(NS (Either String :.: mkres)) xs] -> Either String (NS mkres xs)
 pickFirstParse [] = Left "none of them parsed"
 pickFirstParse (x : xs) =
-    case transformIfItSucceeded x of
-      Left x -> pickFirstParse xs
-      Right y -> Right y
+  case sequence'_NS x of
+    Left x -> pickFirstParse xs
+    Right y -> Right y
+  where
   
 -- | Helper constraint used in @instance 'Client' 'UVerb'@.
 type IsResource ct mkres =
-  ( Compose (MimeUnrender ct) mkres `And`
+  Compose (MimeUnrender ct) mkres `And`
     HasStatus mkres `And`
     MakesResource mkres
-  )
+  
 
 -- | Given a list of types, parses the given response body as each type
 --
