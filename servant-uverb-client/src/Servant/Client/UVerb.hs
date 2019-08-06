@@ -3,16 +3,17 @@ module Servant.Client.UVerb () where
 
 import Data.ByteString.Lazy (ByteString)
 import Data.Foldable (toList)
-import Data.Proxy
-import Data.SOP.BasicFunctors
+import Data.Proxy (Proxy(Proxy))
+import Data.SOP.BasicFunctors ((:.:)(Comp))
 import Data.SOP.Classes (HSequence(hsequence'))
-import Data.SOP.Constraint
-import Data.SOP.NP
-import Data.SOP.NS
-import Servant.API.ContentTypes
+import Data.SOP.Constraint(All, And, Compose)
+
+import Data.SOP.NP (NP, cpure_NP)
+import Data.SOP.NS (NS, apInjs_NP, sequence'_NS)
+import Servant.API.ContentTypes (MimeUnrender(mimeUnrender), Accept, contentTypes)
 import Servant.API (ReflectMethod(reflectMethod))
-import Servant.API.UVerb
-import Servant.Client.Core
+import Servant.API.UVerb (UVerb, MakesUVerb, HasStatus, MakesResource)
+import Servant.Client.Core (HasClient(Client, hoistClientMonad, clientWithRoute), RunClient, runRequest, requestMethod, responseStatusCode, responseBody, requestAccept)
 
 import qualified Data.Sequence as Seq
 
@@ -27,7 +28,7 @@ pickFurstParse (x : xs) =
   
 -- | Helper constraint used in @instance 'Client' 'UVerb'@.
 type IsResource ct mkres =
-  Compose (MimeUnrender ct) mkres `And`
+    (MimeUnrender ct `Compose` mkres) `And`
     HasStatus mkres `And`
     MakesResource mkres
 
