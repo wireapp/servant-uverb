@@ -6,6 +6,7 @@ import Data.SOP.NP
 import Data.SOP.Constraint
 import Data.SOP.BasicFunctors
 import Servant.Client.Core
+import Servant.API.ContentTypes
 
 import Servant.API.UVerb
 
@@ -63,8 +64,22 @@ pickFirstParse (x : xs) =
       Left x -> pickFirstParse xs
       Right y -> Right y
   
+-- | Helper constraint used in @instance 'Client' 'UVerb'@.
+type IsResource cts mkres =
+  ( Compose (AllCTUnrender cts) mkres `And`
+    HasStatus mkres `And`
+    MakesResource mkres
+  )
 
-instance RunClient m => HasClient m (UVerb  mkres method cts resources) where
+instance 
+  ( RunClient m 
+  , AllMime cts
+  , All (IsResource cts mkres) resources
+  , MakesUVerb mkres method cts resources
+  ) => HasClient m (UVerb  mkres method cts resources) where
+
   type Client m (UVerb mkres method cts resources) = m (NS mkres resources)
-  clientWithRoute Proxy Proxy req = undefined
-  hoistClientMonad Proxy Proxy f c = f c
+
+  clientWithRoute Proxy Proxy req = _
+
+  hoistClientMonad Proxy Proxy nt s = nt s
