@@ -64,6 +64,7 @@ library
   build-depends:       servant-uverb == 0.0.1,
                        servant-client-core ^>= 0.14,
                        servant ^>= 0.14,
+                       containers ^>= 0.6,
                        sop-core ^>= 0.4.0.0
   exposed-modules:     Servant.Client.UVerb
 

@@ -3,10 +3,13 @@ module Servant.Client.UVerb () where
 import Data.Proxy
 import Data.SOP.NS
 import Data.SOP.NP
+import qualified Data.Sequence as Seq
 import Data.SOP.Constraint
 import Data.SOP.BasicFunctors
 import Servant.Client.Core
 import Servant.API.ContentTypes
+import Servant.API (ReflectMethod(reflectMethod))
+import Data.Foldable (toList)
 
 import Servant.API.UVerb
 
@@ -65,21 +68,39 @@ pickFirstParse (x : xs) =
       Right y -> Right y
   
 -- | Helper constraint used in @instance 'Client' 'UVerb'@.
-type IsResource cts mkres =
-  ( Compose (AllCTUnrender cts) mkres `And`
+type IsResource ct mkres =
+  ( Compose (MimeUnrender ct) mkres `And`
     HasStatus mkres `And`
     MakesResource mkres
   )
 
+makeParsers :: All MimeUnrender xs => Proxy xs -> NP (Either String) xs
+makeParsers Proxy = cpure_NP (Proxy @CanParse) parser
+
+-- We are the client, so we're free to pick whatever content type we like!
+-- we'll pick the first one
 instance 
   ( RunClient m 
-  , AllMime cts
-  , All (IsResource cts mkres) resources
+  , cts ~ ( ct ': cts')
+  , Accept ct
+  , ReflectMethod method
+  , All (IsResource ct mkres) resources
   , MakesUVerb mkres method cts resources
   ) => HasClient m (UVerb  mkres method cts resources) where
 
   type Client m (UVerb mkres method cts resources) = m (NS mkres resources)
 
-  clientWithRoute Proxy Proxy req = _
+  clientWithRoute Proxy Proxy request = do
+    let accept = Seq.fromList $ toList $ contentTypes (Proxy @ct)
+    let method = reflectMethod (Proxy @method)
+    response <- runRequest request { requestMethod = method, requestAccept = accept }
+    let status = responseStatusCode response
+    let body = responseBody response
+    -- now for each resource, we should try parsing it.
+    -- we can be smart and use the status to decide whether to parse at all
+
+
+
+    undefined
 
   hoistClientMonad Proxy Proxy nt s = nt s
