@@ -8,23 +8,31 @@ import Data.Proxy (Proxy(Proxy))
 import Data.SOP.BasicFunctors ((:.:)(Comp))
 import Data.SOP.Constraint(All, And, Compose)
 
-import Data.SOP.NP (NP, cpure_NP)
-import Data.SOP.NS (NS, apInjs_NP, sequence'_NS)
+import Data.SOP.NP (NP(..), cpure_NP)
+import Data.SOP.NS (NS(..))
 import Servant.API.ContentTypes (MimeUnrender(mimeUnrender), Accept, contentTypes)
 import Servant.API (ReflectMethod(reflectMethod))
-import Servant.API.UVerb (UVerb, MakesUVerb, HasStatus, MakesResource)
+import Servant.API.UVerb (UVerb, MakesUVerb, HasStatus, MakesResource, inject)
 import Servant.Client.Core (HasClient(Client, hoistClientMonad, clientWithRoute), RunClient, runRequest, requestMethod, responseStatusCode, responseBody, requestAccept)
 
 import qualified Data.Sequence as Seq
-  
 
--- TODO Collect all error messages, not just the last one
-pickFirstParse :: m -> [(NS (Either m :.: mkres)) xs] -> Either m (NS mkres xs)
-pickFirstParse m [] = Left m
-pickFirstParse m (x : xs) =
-  case sequence'_NS x of
-    Left _ -> pickFirstParse m xs
-    Right y -> Right y
+-- TODO this is some kind of WriterT I suppose?.
+-- Ask Andres to Code Golf the shit out of this
+-- | Given a list of parsers of 'mkres', returns the first one that succeeds and all the
+-- failures it encountered along the way
+tryParsers' :: err -> NP (Either err :.: mkres) xs -> ([err], Maybe (NS mkres xs))
+tryParsers' err Nil =  ([err], Nothing)
+tryParsers' _ (x :* Nil) =
+  case x of
+    Comp (Left err) -> ([err], Nothing)
+    Comp (Right res) -> ([], Just (Z res))
+tryParsers' _ (x :* xs) =
+  case x of
+    Comp (Left err') -> 
+      let (err'', res) = tryParsers' err' xs
+      in (err' : err'', S <$> res)
+    Comp (Right res) -> ([], Just $ inject res)
 
 type IsResource ct mkres =
     (MimeUnrender ct `Compose` mkres) `And`
@@ -56,11 +64,10 @@ instance
     response <- runRequest request { requestMethod = method, requestAccept = accept }
     let _status = responseStatusCode response
     let body = responseBody response
-    let parsersOf = apInjs_NP . mimeUnrenders @mkres @ct @resources
-    case pickFirstParse "none" . parsersOf $ body of
-      Left x -> error x -- TODO we need to do better here. See servant-client-core source code :) But we're close!
-      Right x -> return x
-
+    let (err, res) = tryParsers' "???" . mimeUnrenders @mkres @ct @resources $ body
+    case res of
+      Nothing -> error (show err)
+      Just x -> return x
   hoistClientMonad Proxy Proxy nt s = nt s
 
 
