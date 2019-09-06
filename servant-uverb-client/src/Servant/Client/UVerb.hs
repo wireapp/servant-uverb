@@ -25,15 +25,7 @@ pickFirstParse m (x : xs) =
   case sequence'_NS x of
     Left _ -> pickFirstParse m xs
     Right y -> Right y
-  where
 
--- collapse_NP  :: NP (K a) xs     -> [a]
--- collapse_NS  :: NS (K a) xs     -> a
--- apInjs'_NP   :: NP f xs         -> NP (K (NS f xs)) xs
--- sequence'_NP :: NP (Eiher m :.: mkres) xs -> Either m (NP mkres xs)
--- sequence'_NS :: NS (f :.: g) xs -> f (NS g xs)
-
--- | Helper constraint used in @instance 'Client' 'UVerb'@.
 type IsResource ct mkres =
     (MimeUnrender ct `Compose` mkres) `And`
     HasStatus mkres `And`

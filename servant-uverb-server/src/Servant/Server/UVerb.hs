@@ -1,9 +1,5 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
-module Servant.Server.UVerb
-( IsResource
-, respond
-)
-where
+module Servant.Server.UVerb () where
 
 import Data.Maybe (fromMaybe)
 import Data.Proxy
