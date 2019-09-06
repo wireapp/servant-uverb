@@ -1,5 +1,17 @@
 -- | Type-level code for implementing and using 'UVerb'.
-module Servant.API.UVerb.OpenUnion where
+module Servant.API.UVerb.OpenUnion
+( IsMember
+, Contains
+, Nat_(..)
+, RIndex
+, Elem
+, UElem(..)
+, Nubbed
+, CheckElemIsMember
+, NoElementError
+, DuplicateElementError
+)
+where
 
 import Data.SOP.Constraint
 import Data.SOP.NS
