@@ -1,4 +1,9 @@
-module Servant.Server.UVerb where
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+module Servant.Server.UVerb
+( IsResource
+, respond
+)
+where
 
 import Data.Maybe (fromMaybe)
 import Data.Proxy
@@ -64,11 +69,3 @@ instance
             (status, Just (contentT, body)) ->
               let bdy = if allowedMethodHead method request then "" else body
               in Route $ responseLBS status ((hContentType, cs contentT) : []) bdy
-
--- | 'return' for 'UVerb' handlers.  Pass it a value of an application type from the routing
--- table, and it will return a value of the union of responses.
-respond
-  :: forall (f :: * -> *) (mkres :: * -> *) (x :: *) (xs :: [*]).
-     (Applicative f, MakesResource mkres x, IsMember x xs)
-  => x -> f (NS mkres xs)
-respond = pure . inject . mkResource

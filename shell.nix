@@ -1,5 +1,5 @@
 let pkgs = import <nixpkgs> {};
-in pkgs.stdenv.mkDerivation {
+in pkgs.mkShell {
   name = "shell-file";
   buildInputs = [
     pkgs.haskell.compiler.ghc864

@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 module Servant.Client.UVerb () where
 
@@ -5,7 +6,6 @@ import Data.ByteString.Lazy (ByteString)
 import Data.Foldable (toList)
 import Data.Proxy (Proxy(Proxy))
 import Data.SOP.BasicFunctors ((:.:)(Comp))
-import Data.SOP.Classes (HSequence(hsequence'))
 import Data.SOP.Constraint(All, And, Compose)
 
 import Data.SOP.NP (NP, cpure_NP)
@@ -16,16 +16,23 @@ import Servant.API.UVerb (UVerb, MakesUVerb, HasStatus, MakesResource)
 import Servant.Client.Core (HasClient(Client, hoistClientMonad, clientWithRoute), RunClient, runRequest, requestMethod, responseStatusCode, responseBody, requestAccept)
 
 import qualified Data.Sequence as Seq
+  
 
--- FUTUREWORK: Use  The Validation semigroup here so we can collect all the error messages
-pickFirstParse :: [(NS (Either String :.: mkres)) xs] -> Either String (NS mkres xs)
-pickFirstParse [] = Left "none of them parsed"
-pickFurstParse (x : xs) =
+-- TODO Collect all error messages, not just the last one
+pickFirstParse :: m -> [(NS (Either m :.: mkres)) xs] -> Either m (NS mkres xs)
+pickFirstParse m [] = Left m
+pickFirstParse m (x : xs) =
   case sequence'_NS x of
-    Left x -> pickFirstParse xs
+    Left _ -> pickFirstParse m xs
     Right y -> Right y
   where
-  
+
+-- collapse_NP  :: NP (K a) xs     -> [a]
+-- collapse_NS  :: NS (K a) xs     -> a
+-- apInjs'_NP   :: NP f xs         -> NP (K (NS f xs)) xs
+-- sequence'_NP :: NP (Eiher m :.: mkres) xs -> Either m (NP mkres xs)
+-- sequence'_NS :: NS (f :.: g) xs -> f (NS g xs)
+
 -- | Helper constraint used in @instance 'Client' 'UVerb'@.
 type IsResource ct mkres =
     (MimeUnrender ct `Compose` mkres) `And`
@@ -55,11 +62,13 @@ instance
     let accept = Seq.fromList . toList . contentTypes $ Proxy @ct
     let method = reflectMethod $ Proxy @method
     response <- runRequest request { requestMethod = method, requestAccept = accept }
-    let status = responseStatusCode response
+    let _status = responseStatusCode response
     let body = responseBody response
     let parsersOf = apInjs_NP . mimeUnrenders @mkres @ct @resources
-    case pickFirstParse . parsersOf $ body of
+    case pickFirstParse "none" . parsersOf $ body of
       Left x -> error x -- TODO we need to do better here. See servant-client-core source code :) But we're close!
       Right x -> return x
 
   hoistClientMonad Proxy Proxy nt s = nt s
+
+
