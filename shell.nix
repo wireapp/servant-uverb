@@ -1,4 +1,8 @@
-let pkgs = import <nixpkgs> {};
+let 
+  channels_ = builtins.fromJSON (builtins.readFile ./nixpkgs.json);
+  channels  = builtins.mapAttrs (k: v: import (builtins.fetchGit v) {
+  }) channels_;
+  pkgs = channels."nixpkgs-unstable";
 in pkgs.mkShell {
   name = "shell-file";
   buildInputs = [
