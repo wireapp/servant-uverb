@@ -3,9 +3,11 @@ module Servant.API.UVerb
   , HasStatus, getStatus
   , MakesResource, mkResource
   , MakesUVerb
+  , respond
   , module Servant.API.UVerb.OpenUnion
   ) where
 
+import Data.SOP.NS
 import Data.SOP.Constraint
 import Network.HTTP.Types (Status)
 import Servant.API (StdMethod)
@@ -104,3 +106,11 @@ type MakesUVerb mkres method cts resources =
   ( All (HasStatus mkres) resources
   , All (MakesResource mkres) resources
   )
+
+-- | 'return' for 'UVerb' handlers.  Pass it a value of an application type from the routing
+-- table, and it will return a value of the union of responses.
+respond
+  :: forall (f :: * -> *) (mkres :: * -> *) (x :: *) (xs :: [*]).
+     (Applicative f, MakesResource mkres x, IsMember x xs)
+  => x -> f (NS mkres xs)
+respond = pure . inject . mkResource
