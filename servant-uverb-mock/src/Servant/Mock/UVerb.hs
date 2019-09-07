@@ -1,30 +1,21 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
-module Servant.Mock.UVerb
-(
-)
-where
+module Servant.Mock.UVerb () where
+
 import Control.Monad.IO.Class (liftIO)
-import Servant.API.UVerb
-import Servant.Server (HasServer)
-import Servant.Mock
-
 import Data.Proxy (Proxy(Proxy))
-import Data.SOP.Constraint(All, Compose)
 import Data.SOP.BasicFunctors ((:.:)(Comp))
-import Data.SOP.NS (NS(..), apInjs_NP, sequence'_NS)
+import Data.SOP.Constraint(All, Compose)
 import Data.SOP.NP (cpure_NP) 
-
+import Data.SOP.NS (NS(..), apInjs_NP, sequence'_NS)
+import Servant.API.UVerb
+import Servant.Mock
+import Servant.Server (HasServer)
 import Test.QuickCheck (Gen, Arbitrary(arbitrary), generate, elements)
-{-instance (Arbitrary a, KnownNat status, ReflectMethod method, AllCTRender ctypes a)
-    => HasGenerate (Verb method status ctypes a) context where
-  mock _ _ = mockArbitrary -}
-
 
 
 arbitraryNS :: forall f xs. All (Arbitrary `Compose` f) xs =>  Gen (NS f xs)
 arbitraryNS =
   sequence'_NS =<< elements (apInjs_NP (cpure_NP (Proxy @(Arbitrary `Compose` f)) (Comp arbitrary)))
-
 
 
 instance 
