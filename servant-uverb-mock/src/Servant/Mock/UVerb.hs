@@ -10,7 +10,7 @@ import Data.SOP.NS (NS(..), apInjs_NP, sequence'_NS)
 import Servant.API.UVerb
 import Servant.Mock
 import Servant.Server (HasServer)
-import Servant.Server.UVerb
+import Servant.Server.UVerb()
 import Test.QuickCheck (Gen, Arbitrary(arbitrary), generate, elements)
 
 
