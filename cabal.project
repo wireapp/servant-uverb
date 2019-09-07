@@ -2,3 +2,5 @@ packages:  servant-uverb/
            servant-uverb-client/
            servant-uverb-server/
            servant-uverb-swagger/
+           servant-uverb-mock/
+tests: True
