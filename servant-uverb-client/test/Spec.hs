@@ -63,8 +63,14 @@ data Routes route = Routes
 api :: Proxy (ToServantApi Routes)
 api = genericApi (Proxy @Routes)
 
+handler :: Server (ToServantApi Routes)
+handler = const (respond (WithStatus @404 (NotFound "nop"))) :<|> const (respond (WithStatus @401 (UserUnauthorized "no")))
+-- uncomment this and you get "empty reply"
+--handler = mock api (Proxy @('[]))
+
 app :: Application
-app = serve api (mock api (Proxy @('[])))
+-- app = serve api (mock api (Proxy @('[])))
+app = serve api handler
 
 main :: IO ()
 main = run 8080 app
