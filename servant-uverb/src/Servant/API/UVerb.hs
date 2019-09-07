@@ -4,10 +4,14 @@ module Servant.API.UVerb
   , MakesResource, mkResource
   , MakesUVerb
   , respond
+  , WithStatus(WithStatus)
   , module Servant.API.UVerb.OpenUnion
   ) where
 
+import GHC.TypeLits (KnownNat, natVal, Nat)
+import Data.SOP.BasicFunctors (I(I))
 import Data.SOP.NS
+import Data.Proxy (Proxy(Proxy))
 import Data.SOP.Constraint
 import Network.HTTP.Types (Status)
 import Servant.API (StdMethod)
@@ -86,6 +90,9 @@ This can certainly be done, but we chose the path where writing the routing tabl
 syntactically a little less elegant, but in return the author of the handler only needs to
 provide information that is not already determined statically.
 
+If you still want to directly put this in your API type, you can fallback to using 'WithStatus'
+TODO: Example
+
 -}
 class HasStatus (mkres :: * -> *) (resource :: *) where
   getStatus :: forall (proxy :: * -> *). proxy (mkres resource) -> Status
@@ -101,6 +108,18 @@ application type into that newtype.
 -}
 class MakesResource (mkres :: * -> *) (resource :: *) where
   mkResource :: resource -> mkres resource
+
+-- | A type that lets you annotate directly what the status code of a resource is.
+-- Implements HasResource, 
+newtype WithStatus (n :: Nat) a = WithStatus a
+
+-- We can choose "I" as mkres to get the old interface, but also keep Matthias
+-- happy
+instance KnownNat n => HasStatus I (WithStatus n a) where
+  getStatus _ = toEnum $ fromInteger $ natVal (Proxy @n)
+
+instance MakesResource I (WithStatus n a) where
+  mkResource = I
 
 type MakesUVerb mkres method cts resources =
   ( All (HasStatus mkres) resources
