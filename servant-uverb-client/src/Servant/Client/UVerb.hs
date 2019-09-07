@@ -31,7 +31,7 @@ proxyOf' _ = Proxy
 -- failures it encountered along the way
 -- TODO: the Nil base-case is never reached because Content types cannot be non-empty in servant
 tryParsers' :: All (HasStatus mkres) xs => Status -> NP (Either String :.: mkres) xs -> ([String], Maybe (NS mkres xs))
-tryParsers' status Nil =  (if status == status401 then [] else ["Expected 401 No Content"], Nothing)
+tryParsers' status Nil =  ("This should've never happened", Nothing)
 tryParsers' _ (Comp x :* Nil) =
   case x of
     Left err -> ([err], Nothing)
@@ -57,8 +57,6 @@ tryParsers' status (Comp x :* xs) =
           ("Status did not match" : err, S <$> res)
        
        
-
-
 type IsResource ct mkres =
     (MimeUnrender ct `Compose` mkres) `And`
     HasStatus mkres `And`
@@ -77,6 +75,7 @@ mimeUnrenders body = cpure_NP (Proxy @(IsResource ct mkres)) (Comp $ mimeUnrende
 instance 
   ( RunClient m 
   , cts ~ ( ct ': cts')
+  , resources ~ (res ': resources')  -- make sure the user provides a list of resources
   , Accept ct
   , ReflectMethod method
   , All (IsResource ct mkres) resources
