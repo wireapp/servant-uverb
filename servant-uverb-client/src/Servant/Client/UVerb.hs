@@ -20,7 +20,7 @@ import Servant.Client.Core.Internal.RunClient (checkContentTypeHeader)
 import qualified Data.Sequence as Seq
 import qualified Data.Text as T
 import           Network.HTTP.Media                   (matches)
-import           Network.HTTP.Types (Status, status401)
+import           Network.HTTP.Types (Status)
 import Control.Monad (unless)
 
 
@@ -31,7 +31,7 @@ proxyOf' _ = Proxy
 -- failures it encountered along the way
 -- TODO: the Nil base-case is never reached because Content types cannot be non-empty in servant
 tryParsers' :: All (HasStatus mkres) xs => Status -> NP (Either String :.: mkres) xs -> ([String], Maybe (NS mkres xs))
-tryParsers' status Nil =  ("This should've never happened", Nothing)
+tryParsers' _ Nil =  (["This should've never happened"], Nothing)
 tryParsers' _ (Comp x :* Nil) =
   case x of
     Left err -> ([err], Nothing)
