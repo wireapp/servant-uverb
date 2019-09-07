@@ -5,10 +5,9 @@ module Servant.Client.UVerb () where
 import Data.ByteString.Lazy (ByteString)
 import Data.Foldable (toList)
 import Data.Proxy (Proxy(Proxy))
-import Data.SOP.BasicFunctors (I(I),(:.:)(Comp))
+import Data.SOP.BasicFunctors ((:.:)(Comp))
 import Data.SOP.Constraint(All, And, Compose)
 
-import GHC.TypeLits
 import Data.SOP.NP (NP(..), cpure_NP)
 import Data.SOP.NS (NS(..))
 import Servant.API.ContentTypes (MimeUnrender(mimeUnrender), Accept, contentTypes)
@@ -21,34 +20,43 @@ import Servant.Client.Core.Internal.RunClient (checkContentTypeHeader)
 import qualified Data.Sequence as Seq
 import qualified Data.Text as T
 import           Network.HTTP.Media                   (matches)
+import           Network.HTTP.Types (Status, status401)
 import Control.Monad (unless)
 
-proxyOf :: a -> Proxy a
-proxyOf _ = Proxy
 
 proxyOf' :: f a -> Proxy a
 proxyOf' _ = Proxy
 
 -- | Given a list of parsers of 'mkres', returns the first one that succeeds and all the
 -- failures it encountered along the way
-tryParsers' :: All (HasStatus mkres) xs => err -> NP (Either err :.: mkres) xs -> ([err], Maybe (NS mkres xs))
-tryParsers' err Nil =  ([err], Nothing)
+-- TODO: the Nil base-case is never reached because Content types cannot be non-empty in servant
+tryParsers' :: All (HasStatus mkres) xs => Status -> NP (Either String :.: mkres) xs -> ([String], Maybe (NS mkres xs))
+tryParsers' status Nil =  (if status == status401 then [] else ["Expected 401 No Content"], Nothing)
 tryParsers' _ (Comp x :* Nil) =
   case x of
     Left err -> ([err], Nothing)
     Right res ->  ([], Just (Z res))
-tryParsers' _ (Comp x :* xs) =
-  -- Let us check what the associated http status is for this resource.  If it
-  -- doesn't match the one that the server responded with, we know we can skip
-  -- this parse
-  let status' = getStatus (proxyOf' x)
-  in
-  -- force the computation of the parser only if the status matches (optimization)
-  case x of
-    Left err' -> 
-      let (err'', res) = tryParsers' err' xs
-      in (err' : err'', S <$> res)
-    Right res -> ([], Just $ inject res)
+tryParsers' status (Comp x :* xs) =
+  -- I am open to suggestions to format this code in a less alien-like way
+  let 
+    status' = getStatus (proxyOf' x)
+  in 
+    if status == status'
+    then
+      case x of
+        Left err' -> 
+          let
+            (err'', res) = tryParsers' status xs
+          in
+            (err' : err'', S <$> res)
+        Right res -> ([], Just $ inject res)
+    else -- no reason to parse in the first place. This ain't the one we're looking for
+        let
+          (err, res) = tryParsers' status xs
+        in
+          ("Status did not match" : err, S <$> res)
+       
+       
 
 
 type IsResource ct mkres =
@@ -64,6 +72,8 @@ mimeUnrenders body = cpure_NP (Proxy @(IsResource ct mkres)) (Comp $ mimeUnrende
 
 -- We are the client, so we're free to pick whatever content type we like!
 -- we'll pick the first one
+-- If the list of resources is _empty_ we assume the return type is NoContent, and the status code _must_ be 401
+-- TODO: Implement that behaviour on the server
 instance 
   ( RunClient m 
   , cts ~ ( ct ': cts')
@@ -85,7 +95,7 @@ instance
 
     let status = responseStatusCode response
     let body = responseBody response
-    let (errors, res) = tryParsers' "no content types (shouldn't happen?)" . mimeUnrenders @mkres @ct @resources $ body
+    let (errors, res) = tryParsers' status  . mimeUnrenders @mkres @ct @resources $ body
     case res of
       Nothing -> throwServantError $ DecodeFailure (T.pack (show errors)) response
       Just x -> return x
