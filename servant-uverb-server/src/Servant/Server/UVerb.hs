@@ -18,10 +18,9 @@ import Servant.API.UVerb
 
 -- | Helper constraint used in @instance 'HasServer' 'UVerb'@.
 type IsResource cts mkres =
-  ( Compose (AllCTRender cts) mkres `And`
+  Compose (AllCTRender cts) mkres `And`
     HasStatus mkres `And`
     MakesResource mkres
-  )
 
 instance
   ( ReflectMethod method
@@ -66,11 +65,3 @@ instance
             (status, Just (contentT, body)) ->
               let bdy = if allowedMethodHead method request then "" else body
               in Route $ responseLBS status ((hContentType, cs contentT) : []) bdy
-
--- | 'return' for 'UVerb' handlers.  Pass it a value of an application type from the routing
--- table, and it will return a value of the union of responses.
-respond
-  :: forall (f :: * -> *) (mkres :: * -> *) (x :: *) (xs :: [*]).
-     (Applicative f, MakesResource mkres x, IsMember x xs)
-  => x -> f (NS mkres xs)
-respond = pure . inject . mkResource
