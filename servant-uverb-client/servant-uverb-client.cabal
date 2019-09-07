@@ -77,7 +77,18 @@ test-suite servant-uverb-test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             Spec.hs
-  build-depends:       servant-uverb-client
+  build-depends:       servant-uverb-client,
+                       servant-uverb-mock,
+                       servant-uverb-server,
+                       servant-uverb,
+                       servant-server,
+                       servant-client,
+                       servant-mock,
+                       servant,
+                       aeson,
+                       warp,
+                       sop-core,
+                       QuickCheck
   ghc-options:         -threaded
                        -rtsopts
                        -with-rtsopts=-N
