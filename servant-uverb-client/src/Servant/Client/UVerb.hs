@@ -38,13 +38,13 @@ tryParsers' _ (Comp x :* Nil) =
     Right res ->  ([], Just (Z res))
 tryParsers' status (Comp x :* xs) =
   -- I am open to suggestions to format this code in a less alien-like way
-  let 
+  let
     status' = getStatus (proxyOf' x)
-  in 
+  in
     if status == status'
     then
       case x of
-        Left err' -> 
+        Left err' ->
           let
             (err'', res) = tryParsers' status xs
           in
@@ -55,16 +55,16 @@ tryParsers' status (Comp x :* xs) =
           (err, res) = tryParsers' status xs
         in
           ("Status did not match" : err, S <$> res)
-       
-       
+
+
 type IsResource ct mkres =
     (MimeUnrender ct `Compose` mkres) `And`
     HasStatus mkres `And`
     MakesResource mkres
 
 -- | Given a list of types, parses the given response body as each type
-mimeUnrenders 
-  :: forall mkres ct xs . All (IsResource ct mkres) xs 
+mimeUnrenders
+  :: forall mkres ct xs . All (IsResource ct mkres) xs
   => ByteString -> NP (Either String :.: mkres) xs
 mimeUnrenders body = cpure_NP (Proxy @(IsResource ct mkres)) (Comp $ mimeUnrender (Proxy @ct) body)
 
@@ -72,8 +72,8 @@ mimeUnrenders body = cpure_NP (Proxy @(IsResource ct mkres)) (Comp $ mimeUnrende
 -- we'll pick the first one
 -- If the list of resources is _empty_ we assume the return type is NoContent, and the status code _must_ be 401
 -- TODO: Implement that behaviour on the server
-instance 
-  ( RunClient m 
+instance
+  ( RunClient m
   , cts ~ ( ct ': cts')
   , resources ~ (res ': resources')  -- make sure the user provides a list of resources
   , Accept ct
@@ -99,5 +99,3 @@ instance
       Nothing -> throwServantError $ DecodeFailure (T.pack (show errors)) response
       Just x -> return x
   hoistClientMonad Proxy Proxy nt s = nt s
-
-

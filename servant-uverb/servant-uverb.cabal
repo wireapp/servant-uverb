@@ -19,7 +19,7 @@ source-repository head
   type:                git
   location:            https://github.com/wireapp/servant-uverb.git
 
-common standard-things 
+common standard-things
   build-depends:       base ^>= 4.12.0.0
   ghc-options:         -Wall
                        -Wincomplete-uni-patterns
