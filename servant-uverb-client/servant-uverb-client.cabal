@@ -62,13 +62,13 @@ library
   import:              standard-things
   hs-source-dirs:      src
   build-depends:       servant-uverb == 0.0.1,
-                       servant-client-core ^>= 0.14,
-                       servant ^>= 0.14,
+                       servant-client-core ^>= 0.16,
+                       servant ^>= 0.16,
                        containers ^>= 0.6,
                        sop-core ^>= 0.4.0.0,
                        bytestring ^>= 0.10,
                        text ^>= 1.2.3,
-                       http-media ^>= 0.7,
+                       http-media ^>= 0.8,
                        http-types ^>= 0.12
   exposed-modules:     Servant.Client.UVerb
 

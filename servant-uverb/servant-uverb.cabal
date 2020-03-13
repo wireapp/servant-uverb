@@ -65,7 +65,7 @@ library
                        Servant.API.UVerb.OpenUnion
 
   build-depends:       http-types ^>= 0.12.3,
-                       servant ^>= 0.14,
+                       servant ^>= 0.16,
                        sop-core ^>= 0.4.0.0
 
 test-suite servant-uverb-test

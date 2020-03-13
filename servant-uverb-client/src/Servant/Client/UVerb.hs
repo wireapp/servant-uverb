@@ -13,15 +13,26 @@ import Data.SOP.NS (NS(..))
 import Servant.API.ContentTypes (MimeUnrender(mimeUnrender), Accept, contentTypes)
 import Servant.API (ReflectMethod(reflectMethod))
 import Servant.API.UVerb (UVerb, MakesUVerb, HasStatus(..), MakesResource(..), inject)
-import Servant.Client.Core (ServantError(..),HasClient(Client, hoistClientMonad, clientWithRoute), RunClient(..), runRequest, requestMethod, responseStatusCode, responseBody, requestAccept)
+import Servant.Client.Core (ClientError(..), HasClient(Client, hoistClientMonad, clientWithRoute), RunClient(..), runRequest, requestMethod, responseStatusCode, responseBody, requestAccept)
 
-import Servant.Client.Core.Internal.RunClient (checkContentTypeHeader)
+import Servant.Client.Core.Response
+import Network.HTTP.Media (MediaType, parseAccept, (//))
 
 import qualified Data.Sequence as Seq
 import qualified Data.Text as T
 import           Network.HTTP.Media                   (matches)
 import           Network.HTTP.Types (Status)
 import Control.Monad (unless)
+
+
+-- | Copied from "Servant.Client.Core.HasClient".
+checkContentTypeHeader :: RunClient m => Response -> m MediaType
+checkContentTypeHeader response =
+  case lookup "Content-Type" $ toList $ responseHeaders response of
+    Nothing -> return $ "application"//"octet-stream"
+    Just t -> case parseAccept t of
+      Nothing -> throwClientError $ InvalidContentTypeHeader response
+      Just t' -> return t'
 
 
 proxyOf' :: f a -> Proxy a
@@ -90,12 +101,12 @@ instance
     response <- runRequest request { requestMethod = method, requestAccept = accept }
     responseContentType <- checkContentTypeHeader response
     unless (any (matches responseContentType) accept) $
-      throwServantError $ UnsupportedContentType responseContentType response
+      throwClientError $ UnsupportedContentType responseContentType response
 
     let status = responseStatusCode response
     let body = responseBody response
     let (errors, res) = tryParsers' status  . mimeUnrenders @mkres @ct @resources $ body
     case res of
-      Nothing -> throwServantError $ DecodeFailure (T.pack (show errors)) response
+      Nothing -> throwClientError $ DecodeFailure (T.pack (show errors)) response
       Just x -> return x
   hoistClientMonad Proxy Proxy nt s = nt s
