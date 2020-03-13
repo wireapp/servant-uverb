@@ -60,7 +60,14 @@ instance ( RIndex a (b ': as) ~ ('S_ i) , UElem a as i) => UElem a (b ': as) ('S
 
 type family Nubbed xs :: Bool where
   Nubbed '[] = 'True
-  Nubbed (x ': xs) = If (Elem x xs) (Nubbed xs) 'False
+  Nubbed (x ': xs) = If (Elem x xs) 'False (Nubbed xs)
+
+_testNubbed :: ( ( Nubbed '[Bool, Int, Int] ~ 'False
+                 , Nubbed '[Int, Int, Bool] ~ 'False
+                 , Nubbed '[Int, Bool] ~ 'True
+                 )
+               => a) -> a
+_testNubbed = id
 
 -- | Check whether @a@ is in list.  This will throw nice errors if the element is not in the
 -- list, or if there is a duplicate in the list.
