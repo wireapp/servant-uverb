@@ -3,5 +3,6 @@ resolver: lts-14.12
 packages:
 - servant-uverb
 - servant-uverb-client
+- servant-uverb-mock
 - servant-uverb-server
 - servant-uverb-swagger

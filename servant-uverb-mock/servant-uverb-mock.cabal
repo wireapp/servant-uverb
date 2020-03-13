@@ -19,7 +19,7 @@ source-repository head
   type:                git
   location:            https://github.com/wireapp/servant-uverb.git
 
-common standard-things 
+common standard-things
   build-depends:       base ^>= 4.12.0.0
   ghc-options:         -Wall
                        -Wincomplete-uni-patterns
@@ -63,8 +63,8 @@ library
   hs-source-dirs:      src
   build-depends:       servant-uverb == 0.0.1,
                        servant-uverb-server == 0.0.1,
-                       servant-server ^>= 0.14,
-                       servant-mock  == 0.8.4,
+                       servant-server ^>= 0.16,
+                       servant-mock  == 0.8.5,
                        sop-core,
                        QuickCheck
   exposed-modules:     Servant.Mock.UVerb
@@ -78,4 +78,3 @@ test-suite servant-uverb-test
   ghc-options:         -threaded
                        -rtsopts
                        -with-rtsopts=-N
-
