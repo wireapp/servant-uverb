@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -Wno-redundant-constraints #-}
 -- | Type-level code for implementing and using 'UVerb'.
 module Servant.API.UVerb.OpenUnion
 ( IsMember
