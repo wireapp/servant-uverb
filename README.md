@@ -43,3 +43,6 @@ We have copied some code from
 package itself wasn't flexible enough, and we had to use
 [sop-core](https://hackage.haskell.org/package/sop-core) to implement
 servant-uverb-server.
+
+Also:
+https://lukwagoallan.com/posts/unifying-servant-server-error-responses

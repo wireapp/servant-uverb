@@ -15,21 +15,37 @@ cache:
 matrix:
   include:
   - ghc: 8.6.4
-  
+
   - ghc: 8.6.4
     env: STACK_YAML="$TRAVIS_BUILD_DIR/stack.yaml"
 
 install:
-  # HLint check
-  - curl -sSL https://raw.github.com/ndmitchell/neil/master/misc/travis.sh | sh -s -- hlint .
+  - |
+    cd $TRAVIS_BUILD_DIR
+    for i in $(git ls-files); do
+        if ( grep -q '\s$' "$i" ); then
+            echo "trailing whitespace in $i"
+            BAD=1
+        fi
+    done
+    if [ "$BAD" == "1" ]; then
+        echo "there were errors."
+        exit 1
+    fi
 
   - |
     if [ -z "$STACK_YAML" ]; then
+      echo -e "\n\n>>> WITH CABAL\n"
       ghc --version
       cabal --version
-      cabal new-update
-      cabal new-build --enable-tests --enable-benchmarks
+      for package in servant-uverb{,-client,-server,-mock,-swagger}; do
+        cd $package
+        cabal new-update
+        cabal new-build --enable-tests --enable-benchmarks
+        cd ..
+      done
     else
+      echo -e "\n\n>>> WITH STACK\n"
       curl -sSL https://get.haskellstack.org/ | sh
       stack --version
       stack build --system-ghc --test --bench --no-run-tests --no-run-benchmarks --ghc-options=-Werror
@@ -38,8 +54,14 @@ install:
 script:
   - |
     if [ -z "$STACK_YAML" ]; then
-       cabal new-test --enable-tests
+      echo -e "\n\n>>> WITH CABAL\n"
+      for package in servant-uverb{,-client,-server,-mock,-swagger}; do
+        cd $package
+        cabal new-test --enable-tests
+        cd ..
+      done
     else
+      echo -e "\n\n>>> WITH STACK\n"
       stack test --system-ghc
     fi
 

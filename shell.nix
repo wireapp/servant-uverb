@@ -1,4 +1,4 @@
-let 
+let
   channels_ = builtins.fromJSON (builtins.readFile ./nixpkgs.json);
   channels  = builtins.mapAttrs (k: v: import (builtins.fetchGit v) {
   }) channels_;
@@ -19,4 +19,3 @@ in pkgs.mkShell {
     export LD_LIBRARY_PATH=${pkgs.gmp}/lib:${pkgs.zlib}/lib:${pkgs.ncurses}/lib
   '';
 }
-

@@ -1,13 +1,8 @@
-resolver: lts-13.16
+resolver: lts-14.12
 
 packages:
 - servant-uverb
-- servant-uverb-server
 - servant-uverb-client
+- servant-uverb-mock
+- servant-uverb-server
 - servant-uverb-swagger
-
-extra-deps:
-- swagger2-2.4
-
-ghc-options:
-  "$locals": -fhide-source-paths
