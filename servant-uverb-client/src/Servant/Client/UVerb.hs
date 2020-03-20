@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# OPTIONS_GHC -Wno-orphans -Wno-unused-imports #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 module Servant.Client.UVerb () where
 

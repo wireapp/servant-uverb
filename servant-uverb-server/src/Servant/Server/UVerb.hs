@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# OPTIONS_GHC -Wno-orphans -Wno-unused-imports #-}
 module Servant.Server.UVerb () where
 
 import Data.Maybe (fromMaybe)

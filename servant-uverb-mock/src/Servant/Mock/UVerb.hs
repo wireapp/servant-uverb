@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 module Servant.Mock.UVerb () where
 
 import Control.Monad.IO.Class (liftIO)
