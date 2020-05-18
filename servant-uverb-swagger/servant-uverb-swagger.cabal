@@ -40,10 +40,12 @@ common standard-things
                        DerivingVia
                        DuplicateRecordFields
                        FlexibleContexts
+                       FlexibleInstances
                        GeneralizedNewtypeDeriving
                        InstanceSigs
                        KindSignatures
                        LambdaCase
+                       MultiParamTypeClasses
                        OverloadedStrings
                        PolyKinds
                        RankNTypes
@@ -67,7 +69,18 @@ test-suite servant-uverb-test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      test
   main-is:             Spec.hs
-  build-depends:       servant-uverb-swagger
+  build-depends:       aeson,
+                       http-types,
+                       servant,
+                       servant-server,
+                       servant-swagger,
+                       servant-swagger-ui,
+                       servant-uverb,
+                       servant-uverb-server,
+                       servant-uverb-swagger,
+                       sop-core,
+                       swagger2 >= 2.4,
+                       warp
   ghc-options:         -Wall
                        -threaded
                        -rtsopts
