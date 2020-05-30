@@ -17,7 +17,10 @@ matrix:
   - ghc: 8.6.4
 
   - ghc: 8.6.4
-    env: STACK_YAML="$TRAVIS_BUILD_DIR/stack.yaml"
+    env: STACK_YAML="$TRAVIS_BUILD_DIR/stack-14.12.yaml"
+
+  - ghc: 8.8.3
+    env: STACK_YAML="$TRAVIS_BUILD_DIR/stack-15.4.yaml"
 
 install:
   - |
@@ -48,7 +51,7 @@ install:
       echo -e "\n\n>>> WITH STACK\n"
       curl -sSL https://get.haskellstack.org/ | sh
       stack --version
-      stack build --system-ghc --test --bench --no-run-tests --no-run-benchmarks --ghc-options=-Werror
+      stack --stack-yaml=$STACK_YAML build --system-ghc --test --bench --no-run-tests --no-run-benchmarks --ghc-options=-Werror
     fi
 
 script:
