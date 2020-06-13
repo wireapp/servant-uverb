@@ -30,12 +30,11 @@
 {-# OPTIONS_GHC -Wno-unused-imports #-}
 
 import Network.HTTP.Types
-import System.Timeout
 import Servant.API (StdMethod(..), JSON, (:<|>)((:<|>)), (:>), Capture)
 import Servant.Server
 import Data.ByteString (ByteString)
 import Data.Aeson
-import GHC.Generics
+import qualified GHC.Generics as GHC
 import GHC.TypeLits
 import Data.SOP.NS
 import Control.Monad.Identity
@@ -55,6 +54,27 @@ import Network.Wai (requestHeaders, responseLBS)
 import Servant.API.ContentTypes
 import Servant (ReflectMethod, reflectMethod)
 import Servant.Server.Internal
+
+import qualified Data.ByteString.Lazy as LB
+import Data.Foldable (toList)
+import Data.Proxy (Proxy(Proxy))
+import Data.SOP.BasicFunctors ((:.:)(Comp))
+import Data.SOP.Constraint(All, And, Compose)
+
+import Data.SOP.NP (NP(..), cpure_NP)
+import Servant.API.ContentTypes (MimeUnrender(mimeUnrender), Accept, contentTypes)
+import Servant.API (ReflectMethod(reflectMethod))
+import Servant.Client.Core (ClientError(..), HasClient(Client, hoistClientMonad, clientWithRoute), RunClient(..), runRequest, requestMethod, responseStatusCode, responseBody, requestAccept)
+
+import Servant.Client.Core.Response
+import Network.HTTP.Media (MediaType, parseAccept, (//))
+
+import qualified Data.Sequence as Seq
+import qualified Data.Text as T
+import           Network.HTTP.Media                   (matches)
+import           Network.HTTP.Types (Status)
+import Control.Monad (unless)
+
 
 
 -- * Servant.API.Status
@@ -83,7 +103,7 @@ statusOf :: forall a proxy. HasStatus a => proxy a -> Status
 statusOf = const (statusVal (Proxy :: Proxy (StatusOf a)))
 
 newtype WithStatus (k :: Nat) a = WithStatus a
-  deriving (Generic)
+  deriving (GHC.Generic)
 
 instance KnownStatus n => HasStatus (WithStatus n a) where
   type StatusOf (WithStatus n a) = n
@@ -106,12 +126,12 @@ respond
 respond = pure . inject . Identity
 
 -- | Helper constraint used in @instance 'HasServer' 'UVerb'@.
-type IsResource contentTypes = AllCTRender contentTypes `And` HasStatus
+type IsServerResource contentTypes = AllCTRender contentTypes `And` HasStatus
 
 instance
   ( ReflectMethod method
   , AllMime contentTypes
-  , All (IsResource contentTypes) as
+  , All (IsServerResource contentTypes) as
   ) => HasServer (UVerb method contentTypes as) context where
 
   type ServerT (UVerb method contentTypes as) m = m (Union as)
@@ -146,7 +166,7 @@ instance
                   )
 
               pickResource :: Union as -> (Status, Maybe (LBS, LBS))
-              pickResource = collapse_NS . cmap_NS (Proxy @(IsResource contentTypes)) encodeResource
+              pickResource = collapse_NS . cmap_NS (Proxy @(IsServerResource contentTypes)) encodeResource
 
           case pickResource output of
             (_, Nothing) -> FailFatal err406 -- this should not happen (checked before), so we make it fatal if it does
@@ -159,7 +179,7 @@ instance
 --
 
 data FisxUser = FisxUser { name :: String }
-  deriving (Generic)
+  deriving (GHC.Generic)
 
 instance ToJSON FisxUser
 
@@ -174,11 +194,11 @@ instance HasStatus FisxUser where
   type StatusOf FisxUser = 203
 
 data ArianUser = ArianUser
-  deriving Generic
+  deriving (GHC.Generic)
 
 instance ToJSON ArianUser
 
-instance (Generic (WithStatus n a), ToJSON a) => ToJSON (WithStatus n a)
+instance (GHC.Generic (WithStatus n a), ToJSON a) => ToJSON (WithStatus n a)
 
 type API = "fisx" :> Capture "bool" Bool :> UVerb 'GET '[JSON] '[FisxUser, WithStatus 303 String]
       :<|> "arian" :> UVerb 'GET '[JSON] '[WithStatus 201 ArianUser]
@@ -194,4 +214,83 @@ handler :: Server API
 handler = fisx :<|> arian
 
 main :: IO ()
-main = void . timeout 10000000 . Warp.run 8080 $ serve (Proxy @API) handler
+main = void . Warp.run 8080 $ serve (Proxy @API) handler
+
+
+-- * client
+--
+
+-- | Copied from "Servant.Client.Core.HasClient".
+checkContentTypeHeader :: RunClient m => Response -> m MediaType
+checkContentTypeHeader response =
+  case lookup "Content-Type" $ toList $ responseHeaders response of
+    Nothing -> return $ "application"//"octet-stream"
+    Just t -> case parseAccept t of
+      Nothing -> throwClientError $ InvalidContentTypeHeader response
+      Just t' -> return t'
+
+-- TODO; better name.
+proxyOf' :: f a -> Proxy a
+proxyOf' _ = Proxy
+
+-- | Given a list of parsers of 'mkres', returns the first one that succeeds and all the
+-- failures it encountered along the way
+-- TODO; better name, rewrite haddocs.
+tryParsers' :: All HasStatus as => Status -> NP (Either String) as -> ([String{- TODO: make this an ADT -}], Maybe (Union as))
+tryParsers' _ Nil = (["no statusses match"], Nothing)
+tryParsers' status (x :* xs) =
+    if status == statusOf x
+    then
+      case x of
+        Left err' ->
+          let
+            (err'', res) = tryParsers' status xs
+          in
+            (err' : err'', S <$> res)
+        Right res -> ([], Just $ inject (Identity res))
+    else -- no reason to parse in the first place. This ain't the one we're looking for
+        let
+          (err, res) = tryParsers' status xs
+        in
+          ("Status did not match" : err, S <$> res)
+
+-- | Given a list of types, parses the given response body as each type
+mimeUnrenders
+  :: forall contentTypes as . All (IsClientResource contentTypes) as
+  => LB.ByteString -> NP (Either String) as
+mimeUnrenders body = cpure_NP (Proxy @(IsClientResource contentTypes)) (mimeUnrender (Proxy @contentTypes) body)
+
+type IsClientResource contentTypes = MimeUnrender contentTypes `And` HasStatus
+
+-- We are the client, so we're free to pick whatever content type we like!
+-- we'll pick the first one
+-- If the list of resources is _empty_ we assume the return type is NoContent, and the status code _must_ be 401
+-- TODO: Implement that behaviour on the server
+instance
+  ( RunClient m
+  , contentTypes ~ (contentType ': contentTypes')  -- TODO: can we to _ instead of contentTypes'?  probably not.
+  , as ~ (a ': as')
+  , Accept contentTypes
+  , ReflectMethod method
+  , All (IsClientResource contentTypes) as
+  , All HasStatus as'  -- ?!
+  ) => HasClient m (UVerb method contentTypes as) where
+
+  type Client m (UVerb method contentTypes as) = m (Union as)
+
+  clientWithRoute _ _ request = do
+    let accept = Seq.fromList . toList . contentTypes $ Proxy @contentTypes
+    let method = reflectMethod $ Proxy @method
+    response <- runRequest request { requestMethod = method, requestAccept = accept }
+    responseContentType <- checkContentTypeHeader response
+    unless (any (matches responseContentType) accept) $
+      throwClientError $ UnsupportedContentType responseContentType response
+
+    let status = responseStatusCode response
+    let body = responseBody response
+    let (errors, res) = tryParsers' status $ mimeUnrenders @contentTypes @as body
+    case res of
+      Nothing -> throwClientError $ DecodeFailure (T.pack (show errors)) response
+      Just x -> return x
+
+  hoistClientMonad _ _ nt s = nt s
