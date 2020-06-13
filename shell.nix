@@ -9,6 +9,7 @@ in pkgs.mkShell {
     pkgs.haskell.compiler.ghc864
     pkgs.cabal-install
     pkgs.pkg-config
+    pkgs.ghcid
   ];
   nativeBuildInputs = [
     pkgs.zlib
