@@ -33,7 +33,9 @@ import Network.HTTP.Types
 import Servant.API (StdMethod(..), JSON, (:<|>)((:<|>)), (:>), Capture)
 import Servant.Server
 import Data.ByteString (ByteString)
+import Control.Concurrent.Async
 import Data.Aeson
+import Servant.Client
 import qualified GHC.Generics as GHC
 import GHC.TypeLits
 import Data.SOP.NS
@@ -175,48 +177,6 @@ instance
               in Route $ responseLBS status ((hContentType, cs contentT) : []) bdy
 
 
--- * example use case
---
-
-data FisxUser = FisxUser { name :: String }
-  deriving (GHC.Generic)
-
-instance ToJSON FisxUser
-
--- | we can get around 'WithStatus' if we want to, and associate the status code with our
--- resource types directly.
---
--- (to avoid orphan instances and make it more explicit what's in the API and what isn't, we
--- could introduce a newtype 'Resource' that wraps all the types we're using in our routing
--- table, and then define lots of 'HasStatus' instances for @Resource This@ and @Resource
--- That@.)
-instance HasStatus FisxUser where
-  type StatusOf FisxUser = 203
-
-data ArianUser = ArianUser
-  deriving (GHC.Generic)
-
-instance ToJSON ArianUser
-
-instance (GHC.Generic (WithStatus n a), ToJSON a) => ToJSON (WithStatus n a)
-
-type API = "fisx" :> Capture "bool" Bool :> UVerb 'GET '[JSON] '[FisxUser, WithStatus 303 String]
-      :<|> "arian" :> UVerb 'GET '[JSON] '[WithStatus 201 ArianUser]
-
-fisx :: Bool -> Handler (Union '[FisxUser, WithStatus 303 String])
-fisx True = respond (FisxUser "fisx")
-fisx False = respond (WithStatus @303 ("still fisx" :: String))
-
-arian :: Handler (Union '[WithStatus 201 ArianUser])
-arian = respond (WithStatus @201 ArianUser)
-
-handler :: Server API
-handler = fisx :<|> arian
-
-main :: IO ()
-main = void . Warp.run 8080 $ serve (Proxy @API) handler
-
-
 -- * client
 --
 
@@ -233,11 +193,14 @@ checkContentTypeHeader response =
 proxyOf' :: f a -> Proxy a
 proxyOf' _ = Proxy
 
+data ClientParseError = ClientParseError String | ClientStatusMismatch | ClientNoMatchingStatus
+  deriving (Eq, Show, GHC.Generic)
+
 -- | Given a list of parsers of 'mkres', returns the first one that succeeds and all the
 -- failures it encountered along the way
 -- TODO; better name, rewrite haddocs.
-tryParsers' :: All HasStatus as => Status -> NP (Either String) as -> ([String{- TODO: make this an ADT -}], Maybe (Union as))
-tryParsers' _ Nil = (["no statusses match"], Nothing)
+tryParsers' :: All HasStatus as => Status -> NP (Either String) as -> ([ClientParseError], Maybe (Union as))
+tryParsers' _ Nil = ([ClientNoMatchingStatus], Nothing)
 tryParsers' status (x :* xs) =
     if status == statusOf x
     then
@@ -246,51 +209,99 @@ tryParsers' status (x :* xs) =
           let
             (err'', res) = tryParsers' status xs
           in
-            (err' : err'', S <$> res)
+            (ClientParseError err' : err'', S <$> res)
         Right res -> ([], Just $ inject (Identity res))
     else -- no reason to parse in the first place. This ain't the one we're looking for
         let
           (err, res) = tryParsers' status xs
         in
-          ("Status did not match" : err, S <$> res)
+          (ClientStatusMismatch : err, S <$> res)
 
 -- | Given a list of types, parses the given response body as each type
 mimeUnrenders
-  :: forall contentTypes as . All (IsClientResource contentTypes) as
+  :: forall contentTypes as . All (MimeUnrender {- AllMimeUnrender? -} contentTypes) as
   => LB.ByteString -> NP (Either String) as
-mimeUnrenders body = cpure_NP (Proxy @(IsClientResource contentTypes)) (mimeUnrender (Proxy @contentTypes) body)
+mimeUnrenders body = cpure_NP (Proxy @(MimeUnrender contentTypes)) (mimeUnrender (Proxy @contentTypes) body)
 
-type IsClientResource contentTypes = MimeUnrender contentTypes `And` HasStatus
-
--- We are the client, so we're free to pick whatever content type we like!
--- we'll pick the first one
--- If the list of resources is _empty_ we assume the return type is NoContent, and the status code _must_ be 401
--- TODO: Implement that behaviour on the server
 instance
   ( RunClient m
   , contentTypes ~ (contentType ': contentTypes')  -- TODO: can we to _ instead of contentTypes'?  probably not.
   , as ~ (a ': as')
   , Accept contentTypes
   , ReflectMethod method
-  , All (IsClientResource contentTypes) as
-  , All HasStatus as'  -- ?!
+  , All (MimeUnrender contentTypes) as
+  , All HasStatus as
   ) => HasClient m (UVerb method contentTypes as) where
 
   type Client m (UVerb method contentTypes as) = m (Union as)
 
   clientWithRoute _ _ request = do
     let accept = Seq.fromList . toList . contentTypes $ Proxy @contentTypes
-    let method = reflectMethod $ Proxy @method
+        method = reflectMethod $ Proxy @method
     response <- runRequest request { requestMethod = method, requestAccept = accept }
     responseContentType <- checkContentTypeHeader response
     unless (any (matches responseContentType) accept) $
       throwClientError $ UnsupportedContentType responseContentType response
 
     let status = responseStatusCode response
-    let body = responseBody response
-    let (errors, res) = tryParsers' status $ mimeUnrenders @contentTypes @as body
+        body = responseBody response
+        (errors, res) = tryParsers' status $ mimeUnrenders @contentTypes @as body
     case res of
       Nothing -> throwClientError $ DecodeFailure (T.pack (show errors)) response
       Just x -> return x
 
   hoistClientMonad _ _ nt s = nt s
+
+
+-- * example use case
+--
+
+data FisxUser = FisxUser { name :: String }
+  deriving (GHC.Generic)
+
+instance ToJSON FisxUser
+instance FromJSON FisxUser
+
+-- | we can get around 'WithStatus' if we want to, and associate the status code with our
+-- resource types directly.
+--
+-- (to avoid orphan instances and make it more explicit what's in the API and what isn't, we
+-- could introduce a newtype 'Resource' that wraps all the types we're using in our routing
+-- table, and then define lots of 'HasStatus' instances for @Resource This@ and @Resource
+-- That@.)
+instance HasStatus FisxUser where
+  type StatusOf FisxUser = 203
+
+data ArianUser = ArianUser
+  deriving (GHC.Generic)
+
+instance ToJSON ArianUser
+instance FromJSON ArianUser
+
+instance (GHC.Generic (WithStatus n a), ToJSON a) => ToJSON (WithStatus n a)
+instance (GHC.Generic (WithStatus n a), FromJSON a) => FromJSON (WithStatus n a)
+
+type API = "fisx" :> Capture "bool" Bool :> UVerb 'GET '[JSON] '[FisxUser, WithStatus 303 String]
+      :<|> "arian" :> UVerb 'GET '[JSON] '[WithStatus 201 ArianUser]
+
+fisx :: Bool -> Handler (Union '[FisxUser, WithStatus 303 String])
+fisx True = respond (FisxUser "fisx")
+fisx False = respond (WithStatus @303 ("still fisx" :: String))
+
+arian :: Handler (Union '[WithStatus 201 ArianUser])
+arian = respond (WithStatus @201 ArianUser)
+
+handler :: Server API
+handler = fisx :<|> arian
+
+
+fisxClient :: Bool -> ClientM (Union '[FisxUser, WithStatus 303 String])
+arianClient :: ClientM (Union '[WithStatus 201 ArianUser])
+(fisxClient :<|> arianClient) = undefined  -- client (Proxy @API)
+
+
+main :: IO ()
+main = do
+  _src <- async . Warp.run 8080 $ serve (Proxy @API) handler
+  _ <- undefined
+  pure ()

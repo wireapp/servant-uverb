@@ -64,6 +64,7 @@ library
   hs-source-dirs:      src
   build-depends:       servant-uverb == 0.0.1,
                        servant-client-core ^>= 0.16,
+                       servant-client ^>= 0.16,
                        servant ^>= 0.16,
                        containers ^>= 0.6,
                        sop-core >= 0.4.0.0 && < 0.6,
