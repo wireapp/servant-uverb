@@ -76,13 +76,14 @@ instance KnownStatus 303 where
 -- * Servant.API.UVerb
 --
 
-class  KnownStatus (StatusOf a) => HasStatus (a :: *) where
+class KnownStatus (StatusOf a) => HasStatus (a :: *) where
   type StatusOf (a :: *) :: Nat
 
 statusOf :: forall a proxy. HasStatus a => proxy a -> Status
 statusOf = const (statusVal (Proxy :: Proxy (StatusOf a)))
 
 newtype WithStatus (k :: Nat) a = WithStatus a
+  deriving (Generic)
 
 instance KnownStatus n => HasStatus (WithStatus n a) where
   type StatusOf (WithStatus n a) = n
@@ -104,11 +105,13 @@ respond
   => x -> f (Union xs)
 respond = pure . inject . Identity
 
+-- | Helper constraint used in @instance 'HasServer' 'UVerb'@.
+type IsResource contentTypes = AllCTRender contentTypes `And` HasStatus
+
 instance
   ( ReflectMethod method
   , AllMime contentTypes
-  , All (AllCTRender contentTypes) as
-  , All HasStatus as
+  , All (IsResource contentTypes) as
   ) => HasServer (UVerb method contentTypes as) context where
 
   type ServerT (UVerb method contentTypes as) m = m (Union as)
@@ -143,7 +146,7 @@ instance
                   )
 
               pickResource :: Union as -> (Status, Maybe (LBS, LBS))
-              pickResource = collapse_NS . cmap_NS (Proxy @(AllCTRender contentTypes a, HasStatus a)) encodeResource
+              pickResource = collapse_NS . cmap_NS (Proxy @(IsResource contentTypes)) encodeResource
 
           case pickResource output of
             (_, Nothing) -> FailFatal err406 -- this should not happen (checked before), so we make it fatal if it does
@@ -156,7 +159,9 @@ instance
 --
 
 data FisxUser = FisxUser { name :: String }
---  deriving (Generic, ToJSON, FromJSON)
+  deriving (Generic)
+
+instance ToJSON FisxUser
 
 -- | we can get around 'WithStatus' if we want to, and associate the status code with our
 -- resource types directly.
@@ -169,17 +174,14 @@ instance HasStatus FisxUser where
   type StatusOf FisxUser = 203
 
 data ArianUser = ArianUser
---  deriving (Generic, ToJSON, FromJSON)
+  deriving Generic
+
+instance ToJSON ArianUser
+
+instance (Generic (WithStatus n a), ToJSON a) => ToJSON (WithStatus n a)
 
 type API = "fisx" :> Capture "bool" Bool :> UVerb 'GET '[JSON] '[FisxUser, WithStatus 303 String]
       :<|> "arian" :> UVerb 'GET '[JSON] '[WithStatus 201 ArianUser]
-
-
-main :: IO ()
-main = undefined -- void . timeout 1000000 . Warp.run 8080 $ serve (Proxy @API) handler
-
-handler :: Server API
-handler = fisx :<|> arian
 
 fisx :: Bool -> Handler (Union '[FisxUser, WithStatus 303 String])
 fisx True = respond (FisxUser "fisx")
@@ -187,3 +189,9 @@ fisx False = respond (WithStatus @303 ("still fisx" :: String))
 
 arian :: Handler (Union '[WithStatus 201 ArianUser])
 arian = respond (WithStatus @201 ArianUser)
+
+handler :: Server API
+handler = fisx :<|> arian
+
+main :: IO ()
+main = void . timeout 10000000 . Warp.run 8080 $ serve (Proxy @API) handler
