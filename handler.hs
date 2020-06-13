@@ -1,5 +1,6 @@
 {-# LANGUAGE ConstraintKinds
 , DataKinds
+, InstanceSigs
 , DeriveFunctor
 , DeriveGeneric
 , DerivingStrategies
@@ -26,14 +27,34 @@
 , ViewPatterns
 #-}
 
-import Network.HTTP.Types(Status, status203)
-import Servant.API (StdMethod(..), JSON, (:<|>), (:>))
+{-# OPTIONS_GHC -Wno-unused-imports #-}
+
+import Network.HTTP.Types
+import System.Timeout
+import Servant.API (StdMethod(..), JSON, (:<|>)((:<|>)), (:>), Capture)
 import Servant.Server
+import Data.ByteString (ByteString)
+import Data.Aeson
+import GHC.Generics
 import GHC.TypeLits
 import Data.SOP.NS
 import Control.Monad.Identity
 import Data.Proxy
 import Servant.API.UVerb.OpenUnion
+import qualified Network.Wai.Handler.Warp as Warp
+
+import Data.Maybe (fromMaybe)
+import qualified Network.Wai as Wai
+import Data.Proxy
+import Data.SOP.BasicFunctors
+import Data.SOP.Constraint
+import Data.SOP.NS
+import Data.String.Conversions
+import Network.HTTP.Types (Status, hContentType, hAccept)
+import Network.Wai (requestHeaders, responseLBS)
+import Servant.API.ContentTypes
+import Servant (ReflectMethod, reflectMethod)
+import Servant.Server.Internal
 
 
 -- * Servant.API.Status
@@ -45,6 +66,12 @@ class KnownNat n => KnownStatus n where
 instance KnownStatus 203 where
   statusVal = const status203
 
+instance KnownStatus 201 where
+  statusVal = const status201
+
+instance KnownStatus 303 where
+  statusVal = const status303
+
 
 -- * Servant.API.UVerb
 --
@@ -52,8 +79,8 @@ instance KnownStatus 203 where
 class  KnownStatus (StatusOf a) => HasStatus (a :: *) where
   type StatusOf (a :: *) :: Nat
 
-status :: forall a proxy. HasStatus a => proxy a -> Status
-status = const (statusVal (Proxy :: Proxy (StatusOf a)))
+statusOf :: forall a proxy. HasStatus a => proxy a -> Status
+statusOf = const (statusVal (Proxy :: Proxy (StatusOf a)))
 
 newtype WithStatus (k :: Nat) a = WithStatus a
 
@@ -64,6 +91,8 @@ instance KnownStatus n => HasStatus (WithStatus n a) where
 -- @type Verb method statusCode contentTypes a = UVerb method contentTypes [WithStatus statusCode a]@
 data UVerb (method :: StdMethod) (contentTypes :: [*]) (as :: [*])
 
+type Union = NS Identity
+
 
 -- * Servant.API.UVerb
 --
@@ -71,17 +100,63 @@ data UVerb (method :: StdMethod) (contentTypes :: [*]) (as :: [*])
 -- | 'return' for 'UVerb' handlers.  Takes a value of any of the members of the open union,
 -- and will construct a union value in an 'Applicative' (eg. 'Server').
 respond
-  :: forall (f :: * -> *) (x :: *) (xs :: [*]). (Applicative f, HasStatus x, IsMember x xs)
-  => x -> f (NS Identity xs)
+  :: forall (x :: *) (xs :: [*]) (f :: * -> *). (Applicative f, HasStatus x, IsMember x xs)
+  => x -> f (Union xs)
 respond = pure . inject . Identity
 
+instance
+  ( ReflectMethod method
+  , AllMime contentTypes
+  , All (AllCTRender contentTypes) as
+  , All HasStatus as
+  ) => HasServer (UVerb method contentTypes as) context where
 
+  type ServerT (UVerb method contentTypes as) m = m (Union as)
+
+  hoistServerWithContext _ _ nt s = nt s
+
+  route :: forall env. Proxy (UVerb method contentTypes as)
+                                    -> Context context
+                                    -> Delayed env (Server (UVerb method contentTypes as))
+                                    -> Router env
+  route _proxy _ctx action = leafRouter route'
+    where
+      method = reflectMethod (Proxy @method)
+
+      route' env request cont = do
+        let accH :: ByteString  -- for picking the content type.
+            accH = fromMaybe ct_wildcard $ lookup hAccept $ requestHeaders request
+
+            action' :: Delayed env (Handler (Union as))
+            action' = action
+                `addMethodCheck` methodCheck method request
+                `addAcceptCheck` acceptCheck (Proxy @contentTypes) accH
+
+            mkProxy :: a -> Proxy a
+            mkProxy _ = Proxy
+
+        runAction action' env request cont $ \(output :: Union as) -> do
+          let encodeResource :: (AllCTRender contentTypes a, HasStatus a) => Identity a -> K (Status, Maybe (LBS, LBS)) a
+              encodeResource (Identity res) = K
+                  ( statusOf $ mkProxy res
+                  , handleAcceptH (Proxy @contentTypes) (AcceptHeader accH) res
+                  )
+
+              pickResource :: Union as -> (Status, Maybe (LBS, LBS))
+              pickResource = collapse_NS . cmap_NS (Proxy @(AllCTRender contentTypes a, HasStatus a)) encodeResource
+
+          case pickResource output of
+            (_, Nothing) -> FailFatal err406 -- this should not happen (checked before), so we make it fatal if it does
+            (status, Just (contentT, body)) ->
+              let bdy = if allowedMethodHead method request then "" else body
+              in Route $ responseLBS status ((hContentType, cs contentT) : []) bdy
 
 
 -- * example use case
 --
 
 data FisxUser = FisxUser { name :: String }
+--  deriving (Generic, ToJSON, FromJSON)
 
 -- | we can get around 'WithStatus' if we want to, and associate the status code with our
 -- resource types directly.
@@ -94,28 +169,21 @@ instance HasStatus FisxUser where
   type StatusOf FisxUser = 203
 
 data ArianUser = ArianUser
+--  deriving (Generic, ToJSON, FromJSON)
 
-type API = "fisx" :> UVerb 'GET '[JSON] '[FisxUser, WithStatus 303 String]
+type API = "fisx" :> Capture "bool" Bool :> UVerb 'GET '[JSON] '[FisxUser, WithStatus 303 String]
       :<|> "arian" :> UVerb 'GET '[JSON] '[WithStatus 201 ArianUser]
 
 
-
-{-
-instance  HasServer (Get ctypes xs) where
-  type Server = Sum (Server xs)
-
-  server :: All HasStatus xs => IO (Sum (Server xs)) -> IO ()
-  server handler = do
-    xs <- handler
-    status <- mapSum (\(HasStatus a => x :: a) -> knownNatVal (Proxy :: Proxy @(TheStatus a)) xS
-    respond status
-
-
--}
-
-
 main :: IO ()
-main = undefined
+main = undefined -- void . timeout 1000000 . Warp.run 8080 $ serve (Proxy @API) handler
 
 handler :: Server API
-handler = undefined
+handler = fisx :<|> arian
+
+fisx :: Bool -> Handler (Union '[FisxUser, WithStatus 303 String])
+fisx True = respond (FisxUser "fisx")
+fisx False = respond (WithStatus @303 ("still fisx" :: String))
+
+arian :: Handler (Union '[WithStatus 201 ArianUser])
+arian = respond (WithStatus @201 ArianUser)
