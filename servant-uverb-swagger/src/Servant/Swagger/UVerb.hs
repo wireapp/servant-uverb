@@ -1,4 +1,6 @@
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 module Servant.Swagger.UVerb () where
 
@@ -7,7 +9,7 @@ import qualified Data.HashMap.Strict.InsOrd as I
 import Data.Proxy (Proxy (Proxy))
 import Data.Swagger (ToSchema, Swagger(..), PathItem(..))
 import Servant.API.Verbs (Verb)
-import Servant.API.UVerb (HasStatus, StatusOf, UVerb, WithStatus)
+import Servant.API.UVerb (HasStatus, StatusOf, UVerb, WithStatus(WithStatus))
 import Servant.Swagger.Internal (AllAccept, HasSwagger(..), SwaggerMethod)
 
 -- workaround for https://github.com/GetShopTV/swagger2/issues/218
@@ -58,4 +60,4 @@ instance
     toSwagger (Proxy :: Proxy (Verb method (StatusOf a) cs a))
       `combineSwagger` toSwagger (Proxy :: Proxy (UVerb method cs as))
 
-instance ToSchema a => ToSchema (WithStatus s a) where
+deriving instance ToSchema a => ToSchema (WithStatus s a)
