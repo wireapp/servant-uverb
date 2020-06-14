@@ -2,11 +2,11 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
 module Servant.Swagger.UVerb () where
 
-import Data.Proxy
-import Data.Swagger
-import Servant.API.Verbs
-import Servant.API.UVerb
-import Servant.Swagger.Internal
+import Data.Proxy (Proxy (Proxy))
+import Data.Swagger (ToSchema)
+import Servant.API.Verbs (Verb)
+import Servant.API.UVerb (HasStatus, StatusOf, UVerb, WithStatus)
+import Servant.Swagger.Internal (AllAccept, HasSwagger(..), SwaggerMethod)
 
 instance HasSwagger (UVerb method cs '[]) where
   toSwagger _ = mempty
