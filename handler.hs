@@ -1,4 +1,5 @@
 {-# LANGUAGE ConstraintKinds
+, AllowAmbiguousTypes
 , DataKinds
 , InstanceSigs
 , DeriveFunctor
@@ -44,6 +45,8 @@ import Data.Proxy
 import Servant.API.UVerb.OpenUnion
 import qualified Network.Wai.Handler.Warp as Warp
 
+import Control.Arrow ((+++))
+import Data.Either (partitionEithers)
 import Data.Maybe (fromMaybe)
 import qualified Network.Wai as Wai
 import Data.Proxy
@@ -199,44 +202,37 @@ data ClientParseError = ClientParseError String | ClientStatusMismatch | ClientN
 -- | Given a list of parsers of 'mkres', returns the first one that succeeds and all the
 -- failures it encountered along the way
 -- TODO; better name, rewrite haddocs.
-tryParsers' :: All HasStatus as => Status -> NP (Either String) as -> ([ClientParseError], Maybe (Union as))
-tryParsers' _ Nil = ([ClientNoMatchingStatus], Nothing)
-tryParsers' status (x :* xs) =
-    if status == statusOf x
-    then
-      case x of
-        Left err' ->
-          let
-            (err'', res) = tryParsers' status xs
-          in
-            (ClientParseError err' : err'', S <$> res)
-        Right res -> ([], Just $ inject (Identity res))
-    else -- no reason to parse in the first place. This ain't the one we're looking for
-        let
-          (err, res) = tryParsers' status xs
-        in
-          (ClientStatusMismatch : err, S <$> res)
+tryParsers' :: All HasStatus as => Status -> NP ([] :.: Either String) as -> Either [ClientParseError] (Union as)
+tryParsers' _ Nil = Left [ClientNoMatchingStatus]
+tryParsers' status (Comp x :* xs)
+  | status == statusOf (Comp x)
+  = case partitionEithers x of
+    (err', []) -> (map ClientParseError err' ++) +++ S $ tryParsers' status xs
+    (_, (res:_)) -> Right . inject . Identity $ res
+  | otherwise -- no reason to parse in the first place. This ain't the one we're looking for
+  = (ClientStatusMismatch:) +++ S $ tryParsers' status xs
+
 
 -- | Given a list of types, parses the given response body as each type
 mimeUnrenders
-  :: forall contentTypes as . All (MimeUnrender {- AllMimeUnrender? -} contentTypes) as
-  => LB.ByteString -> NP (Either String) as
-mimeUnrenders body = cpure_NP (Proxy @(MimeUnrender contentTypes)) (mimeUnrender (Proxy @contentTypes) body)
+  :: forall contentTypes as . All (AllMimeUnrender contentTypes) as
+  => LB.ByteString -> NP ([] :.: Either String) as
+mimeUnrenders body = cpure_NP (Proxy @(AllMimeUnrender contentTypes)) (Comp . map (\(_, parser) -> parser body) . allMimeUnrender $ Proxy @contentTypes)
 
 instance
   ( RunClient m
   , contentTypes ~ (contentType ': contentTypes')  -- TODO: can we to _ instead of contentTypes'?  probably not.
   , as ~ (a ': as')
-  , Accept contentTypes
+  , AllMime contentTypes
   , ReflectMethod method
-  , All (MimeUnrender contentTypes) as
+  , All (AllMimeUnrender contentTypes) as
   , All HasStatus as
   ) => HasClient m (UVerb method contentTypes as) where
 
   type Client m (UVerb method contentTypes as) = m (Union as)
 
   clientWithRoute _ _ request = do
-    let accept = Seq.fromList . toList . contentTypes $ Proxy @contentTypes
+    let accept = Seq.fromList . allMime $ Proxy @contentTypes
         method = reflectMethod $ Proxy @method
     response <- runRequest request { requestMethod = method, requestAccept = accept }
     responseContentType <- checkContentTypeHeader response
@@ -245,10 +241,10 @@ instance
 
     let status = responseStatusCode response
         body = responseBody response
-        (errors, res) = tryParsers' status $ mimeUnrenders @contentTypes @as body
+        res = tryParsers' status $ mimeUnrenders @contentTypes @as body
     case res of
-      Nothing -> throwClientError $ DecodeFailure (T.pack (show errors)) response
-      Just x -> return x
+      Left errors -> throwClientError $ DecodeFailure (T.pack (show errors)) response
+      Right x -> return x
 
   hoistClientMonad _ _ nt s = nt s
 
@@ -297,7 +293,7 @@ handler = fisx :<|> arian
 
 fisxClient :: Bool -> ClientM (Union '[FisxUser, WithStatus 303 String])
 arianClient :: ClientM (Union '[WithStatus 201 ArianUser])
-(fisxClient :<|> arianClient) = undefined  -- client (Proxy @API)
+(fisxClient :<|> arianClient) = client (Proxy @API)
 
 
 main :: IO ()
