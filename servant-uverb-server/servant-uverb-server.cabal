@@ -64,6 +64,7 @@ library
   hs-source-dirs:      src
   exposed-modules:     Servant.Server.UVerb
   build-depends:       http-types ^>= 0.12.3,
+                       bytestring ^>= 0.10.10.0,
                        servant ^>= 0.16,
                        servant-server ^>= 0.16,
                        servant-uverb == 0.0.1,
