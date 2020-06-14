@@ -15,348 +15,28 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -Wall -Wno-orphans #-}
 
-{-# OPTIONS_GHC -Wall #-}
-
-import qualified Network.HTTP.Client as Client
 import Control.Concurrent (threadDelay)
-import Data.Typeable
--- import Servant.Swagger
-
--- misc stuff
-import Control.Arrow ((+++), left)
 import Control.Concurrent.Async
-import Control.Monad.Identity
-
 import Data.Aeson
-import Data.ByteString (ByteString)
-import qualified Data.ByteString.Lazy as LB
-import Data.Either (partitionEithers)
-import Data.Foldable (toList)
-import Data.Maybe (fromMaybe)
-import qualified Data.Sequence as Seq
-import Data.String.Conversions
-import qualified Data.Text as T
-
+import Data.Typeable
 import qualified GHC.Generics as GHC
-import GHC.TypeLits
-
--- sop-core
-import Data.SOP.BasicFunctors
-import Data.SOP.Constraint
-import Data.SOP.NP (NP(..), cpure_NP)
-import Data.SOP.NS
-
--- network stuff
-import Network.HTTP.Media (MediaType, matches, parseAccept, (//))
+import qualified Network.HTTP.Client as Client
 import Network.HTTP.Types
-import Network.Wai (requestHeaders, responseLBS)
 import qualified Network.Wai.Handler.Warp as Warp
-
--- servant
-import Servant (ReflectMethod, reflectMethod)
-import Servant.API ((:<|>)((:<|>)), (:>), Capture)
-import Servant.API.UVerb.OpenUnion
-import Servant.API.ContentTypes
+import Servant.API
+import Servant.API.UVerb
 import Servant.Client
-import Servant.Client.Core (RunClient(..), runRequest, requestMethod, requestAccept)
+import Servant.Client.UVerb
 import Servant.Server
-import Servant.Server.Internal
+import Servant.Server.UVerb
 
-
--- * Servant.API.Status
---
-
-class KnownNat n => KnownStatus n where
-  statusVal :: proxy n -> Status
-
-instance KnownStatus 203 where
-  statusVal = const status203
-
-instance KnownStatus 201 where
-  statusVal = const status201
-
-instance KnownStatus 303 where
-  statusVal = const status303
-
-
--- * Servant.API.UVerb
---
-
-class KnownStatus (StatusOf a) => HasStatus (a :: *) where
-  type StatusOf (a :: *) :: Nat
-
-statusOf :: forall a proxy. HasStatus a => proxy a -> Status
-statusOf = const (statusVal (Proxy :: Proxy (StatusOf a)))
-
-type family Statuses (as :: [*]) :: [Nat]
-type instance Statuses '[] = '[]
-type instance Statuses (a ': as) = StatusOf a ': Statuses as
-
-newtype WithStatus (k :: Nat) a = WithStatus a
-  deriving (Eq, Show, GHC.Generic)
-
-instance KnownStatus n => HasStatus (WithStatus n a) where
-  type StatusOf (WithStatus n a) = n
-
--- FUTUREWORK:
--- @type Verb method statusCode contentTypes a = UVerb method contentTypes [WithStatus statusCode a]@
--- no, wait, this is not the same.  this would mean people would have to use 'respond' instead
--- of 'pure' or 'return'.
-data UVerb (method :: StdMethod) (contentTypes :: [*]) (as :: [*])
-
-type Union = NS Identity
-
-
--- * Servant.API.UVerb
---
-
--- | 'return' for 'UVerb' handlers.  Takes a value of any of the members of the open union,
--- and will construct a union value in an 'Applicative' (eg. 'Server').
-respond
-  :: forall (x :: *) (xs :: [*]) (f :: * -> *). (Applicative f, HasStatus x, IsMember x xs)
-  => x -> f (Union xs)
-respond = pure . inject . Identity
-
--- | Helper constraint used in @instance 'HasServer' 'UVerb'@.
-type IsServerResource contentTypes = AllCTRender contentTypes `And` HasStatus
-
-instance
-  ( ReflectMethod method
-  , AllMime contentTypes
-  , All (IsServerResource contentTypes) as
-  , Unique (Statuses as)  -- for consistency with servant-swagger (server would work fine
-                          -- wihtout; client is a bit of a corner case, because it dispatches
-                          -- the parser based on the status code.  with this uniqueness
-                          -- constraint it won't have to run more than one parser in weird
-                          -- corner cases.
-  ) => HasServer (UVerb method contentTypes as) context where
-
-  type ServerT (UVerb method contentTypes as) m = m (Union as)
-
-  hoistServerWithContext _ _ nt s = nt s
-
-  route :: forall env. Proxy (UVerb method contentTypes as)
-                                    -> Context context
-                                    -> Delayed env (Server (UVerb method contentTypes as))
-                                    -> Router env
-  route _proxy _ctx action = leafRouter route'
-    where
-      method = reflectMethod (Proxy @method)
-
-      route' env request cont = do
-        let accH :: ByteString  -- for picking the content type.
-            accH = fromMaybe ct_wildcard $ lookup hAccept $ requestHeaders request
-
-            action' :: Delayed env (Handler (Union as))
-            action' = action
-                `addMethodCheck` methodCheck method request
-                `addAcceptCheck` acceptCheck (Proxy @contentTypes) accH
-
-            mkProxy :: a -> Proxy a
-            mkProxy _ = Proxy
-
-        runAction action' env request cont $ \(output :: Union as) -> do
-          let encodeResource :: (AllCTRender contentTypes a, HasStatus a) => Identity a -> K (Status, Maybe (LBS, LBS)) a
-              encodeResource (Identity res) = K
-                  ( statusOf $ mkProxy res
-                  , handleAcceptH (Proxy @contentTypes) (AcceptHeader accH) res
-                  )
-
-              pickResource :: Union as -> (Status, Maybe (LBS, LBS))
-              pickResource = collapse_NS . cmap_NS (Proxy @(IsServerResource contentTypes)) encodeResource
-
-          case pickResource output of
-            (_, Nothing) -> FailFatal err406 -- this should not happen (checked before), so we make it fatal if it does
-            (status, Just (contentT, body)) ->
-              let bdy = if allowedMethodHead method request then "" else body
-              in Route $ responseLBS status ((hContentType, cs contentT) : []) bdy
-
-
--- * client
---
-
--- | Copied from "Servant.Client.Core.HasClient".
-checkContentTypeHeader :: RunClient m => Response -> m MediaType
-checkContentTypeHeader response =
-  case lookup "Content-Type" $ toList $ responseHeaders response of
-    Nothing -> return $ "application"//"octet-stream"
-    Just t -> case parseAccept t of
-      Nothing -> throwClientError $ InvalidContentTypeHeader response
-      Just t' -> return t'
-
-data ClientParseError = ClientParseError MediaType String | ClientStatusMismatch | ClientNoMatchingStatus
-  deriving (Eq, Show, GHC.Generic)
-
--- | Given a list of parsers of 'mkres', returns the first one that succeeds and all the
--- failures it encountered along the way
--- TODO; better name, rewrite haddocs.
-tryParsers' :: All HasStatus as => Status -> NP ([] :.: Either (MediaType, String)) as -> Either [ClientParseError] (Union as)
-tryParsers' _ Nil = Left [ClientNoMatchingStatus]
-tryParsers' status (Comp x :* xs)
-  | status == statusOf (Comp x)
-  = case partitionEithers x of
-    (err', []) -> (map (uncurry ClientParseError) err' ++) +++ S $ tryParsers' status xs
-    (_, (res:_)) -> Right . inject . Identity $ res
-  | otherwise -- no reason to parse in the first place. This ain't the one we're looking for
-  = (ClientStatusMismatch:) +++ S $ tryParsers' status xs
-
-
--- | Given a list of types, parses the given response body as each type
-mimeUnrenders
-  :: forall contentTypes as . All (AllMimeUnrender contentTypes) as
-  => Proxy contentTypes -> LB.ByteString -> NP ([] :.: Either (MediaType, String)) as
-mimeUnrenders ctp body = cpure_NP (Proxy @(AllMimeUnrender contentTypes)) (Comp . map (\(mediaType, parser) -> left ((,) mediaType) (parser body)) . allMimeUnrender $ ctp)
-
-instance
-  ( RunClient m
-  , contentTypes ~ (contentType ': contentTypes')  -- TODO: can we to _ instead of contentTypes'?  probably not.
-  , as ~ (a ': as')
-  , AllMime contentTypes
-  , ReflectMethod method
-  , All (AllMimeUnrender contentTypes) as
-  , All HasStatus as
-  , Unique (Statuses as)
-  ) => HasClient m (UVerb method contentTypes as) where
-
-  type Client m (UVerb method contentTypes as) = m (Union as)
-
-  clientWithRoute _ _ request = do
-    let accept = Seq.fromList . allMime $ Proxy @contentTypes
-        -- TODO(fisx): we want to send an accept header with, say, the first content type
-        -- supported by the api, so we don't have to parse all of them, no?  not sure i'm
-        -- missing anything here.
-
-        method = reflectMethod $ Proxy @method
-    response <- runRequest request { requestMethod = method, requestAccept = accept }
-    responseContentType <- checkContentTypeHeader response
-    unless (any (matches responseContentType) accept) $
-      throwClientError $ UnsupportedContentType responseContentType response
-
-    let status = responseStatusCode response
-        body = responseBody response
-        res = tryParsers' status $ mimeUnrenders (Proxy @contentTypes) body
-    case res of
-      Left errors -> throwClientError $ DecodeFailure (T.pack (show errors)) response
-      Right x -> return x
-
-  hoistClientMonad _ _ nt s = nt s
-
--- | convenience function to extract an unknown union element using a type class.
-collapseUResp :: forall c a as. All c as
-  => Proxy (c :: * -> Constraint) -> (forall x. c x => x -> a) -> Union as -> a
-collapseUResp proxy render = collapse_NS . cmap_NS proxy (K . render . runIdentity)
-
--- | convenience function to extract an unknown union element using 'cast'.
-extractUResp :: forall a as. (All Typeable as, Typeable a) => Union as -> Maybe a
-extractUResp = collapse_NS . cmap_NS (Proxy @Typeable) (K . cast . runIdentity)
-
-
--- * swagger
---
-
-
-{-
-
-... Unique (Statuses as)
-
-
-instance (HasSwagger (UVerb 'GET '[JSON] '[WithStatus 201 ArianUser])) where
-
-
-
-instance {-# OVERLAPPABLE #-} (ToSchema a, AllAccept cs, KnownNat status, SwaggerMethod method) => HasSwagger (UVerb method status cs a) where
-  toSwagger _ = toSwagger (Proxy :: Proxy (Verb method status cs (Headers '[] a)))
-
-instance {-# OVERLAPPABLE #-} (ToSchema a, AllAccept cs, AllToResponseHeader hs, KnownNat status, SwaggerMethod method)
-  => HasSwagger (Verb method status cs (Headers hs a)) where
-  toSwagger = mkEndpoint "/"
-
--- ATTENTION: do not remove this instance!
--- A similar instance above will always use the more general
--- polymorphic -- HasSwagger instance and will result in a type error
--- since 'NoContent' does not have a 'ToSchema' instance.
-instance (AllAccept cs, KnownNat status, SwaggerMethod method) => HasSwagger (Verb method status cs NoContent) where
-  toSwagger _ = toSwagger (Proxy :: Proxy (Verb method status cs (Headers '[] NoContent)))
-
-instance (AllAccept cs, AllToResponseHeader hs, KnownNat status, SwaggerMethod method)
-  => HasSwagger (Verb method status cs (Headers hs NoContent)) where
-  toSwagger = mkEndpointNoContent "/"
-
-instance (SwaggerMethod method) => HasSwagger (NoContentVerb method) where
-  toSwagger =  mkEndpointNoContentVerb "/"
-
-
--- | Make a singleton Swagger spec (with only one endpoint).
--- For endpoints with no content see 'mkEndpointNoContent'.
-mkUEndpoint :: forall a cs hs proxy method status.
-  (ToSchema a, AllAccept cs, AllToResponseHeader hs, SwaggerMethod method, KnownNat status)
-  => FilePath                                       -- ^ Endpoint path.
-  -> proxy (UVerb method cs (Headers hs as))  -- ^ Method, content-types, headers and response.
-  -> Swagger
-mkUEndpoint path proxy
-  = mkEndpointWithSchemaRef (Just ref) path proxy
-      & definitions .~ defs
-  where
-    (defs, ref) = runDeclare (declareSchemaRef (Proxy :: Proxy (Union as))) mempty
-
--- | Make a singletone 'Swagger' spec (with only one endpoint) and with no content schema.
-mkUEndpointNoContent :: forall nocontent cs hs proxy method status.
-  (AllAccept cs, AllToResponseHeader hs, SwaggerMethod method, KnownNat status)
-  => FilePath                                               -- ^ Endpoint path.
-  -> proxy (Verb method status cs (Headers hs nocontent))  -- ^ Method, content-types, headers and response.
-  -> Swagger
-mkUEndpointNoContent path proxy
-  = mkEndpointWithSchemaRef Nothing path proxy
-
--- | Like @'mkEndpoint'@ but with explicit schema reference.
--- Unlike @'mkEndpoint'@ this function does not update @'definitions'@.
-mkUEndpointWithSchemaRef :: forall cs hs proxy method status a.
-  (AllAccept cs, AllToResponseHeader hs, SwaggerMethod method, KnownNat status)
-  => Maybe (Referenced Schema)
-  -> FilePath
-  -> proxy (Verb method status cs (Headers hs a))
-  -> Swagger
-mkUEndpointWithSchemaRef mref path _ = mempty
-  & paths.at path ?~
-    (mempty & method ?~ (mempty
-      & produces ?~ MimeList responseContentTypes
-      & at code ?~ Inline (mempty
-            & schema  .~ mref
-            & headers .~ responseHeaders)))
-  where
-    method               = swaggerMethod (Proxy :: Proxy method)
-    code                 = fromIntegral (natVal (Proxy :: Proxy status))
-    responseContentTypes = allContentType (Proxy :: Proxy cs)
-    responseHeaders      = toAllResponseHeaders (Proxy :: Proxy hs)
-
-mkUEndpointNoContentVerb :: forall proxy method.
-  (SwaggerMethod method)
-  => FilePath                      -- ^ Endpoint path.
-  -> proxy (NoContentVerb method)  -- ^ Method
-  -> Swagger
-mkUEndpointNoContentVerb path _ = mempty
-  & paths.at path ?~
-    (mempty & method ?~ (mempty
-      & at code ?~ Inline mempty))
-  where
-    method               = swaggerMethod (Proxy :: Proxy method)
-    code                 = 204 -- hardcoded in servant-server
-
-
--}
-
-
-
-
-
--- * example use case
---
-
-data FisxUser = FisxUser { name :: String }
+data FisxUser = FisxUser {name :: String}
   deriving (Eq, Show, GHC.Generic)
 
 instance ToJSON FisxUser
+
 instance FromJSON FisxUser
 
 -- | we can get around 'WithStatus' if we want to, and associate the status code with our
@@ -373,13 +53,16 @@ data ArianUser = ArianUser
   deriving (Eq, Show, GHC.Generic)
 
 instance ToJSON ArianUser
+
 instance FromJSON ArianUser
 
 instance (GHC.Generic (WithStatus n a), ToJSON a) => ToJSON (WithStatus n a)
+
 instance (GHC.Generic (WithStatus n a), FromJSON a) => FromJSON (WithStatus n a)
 
-type API = "fisx" :> Capture "bool" Bool :> UVerb 'GET '[JSON] '[FisxUser, WithStatus 303 String]
-      :<|> "arian" :> UVerb 'GET '[JSON] '[WithStatus 201 ArianUser]
+type API =
+  "fisx" :> Capture "bool" Bool :> UVerb 'GET '[JSON] '[FisxUser, WithStatus 303 String]
+    :<|> "arian" :> UVerb 'GET '[JSON] '[WithStatus 201 ArianUser]
 
 fisx :: Bool -> Handler (Union '[FisxUser, WithStatus 303 String])
 fisx True = respond (FisxUser "fisx")
@@ -391,11 +74,10 @@ arian = respond (WithStatus @201 ArianUser)
 handler :: Server API
 handler = fisx :<|> arian
 
-
 fisxClient :: Bool -> ClientM (Union '[FisxUser, WithStatus 303 String])
+
 arianClient :: ClientM (Union '[WithStatus 201 ArianUser])
 (fisxClient :<|> arianClient) = client (Proxy @API)
-
 
 main :: IO ()
 main = do
@@ -407,8 +89,7 @@ main = do
   print $ collapseUResp (Proxy @Show) show <$> result
   print $ extractUResp @FisxUser <$> result
   print $ extractUResp @(WithStatus 303 String) <$> result
---  print $ toSwagger (Proxy @API)
+  -- print $ toSwagger (Proxy @API)
   pure ()
-
 
 -- TODO: UStream (like 'Stream')
