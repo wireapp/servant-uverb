@@ -205,13 +205,12 @@ data ClientParseError = ClientParseError String | ClientStatusMismatch | ClientN
 tryParsers' :: All HasStatus as => Status -> NP ([] :.: Either String) as -> Either [ClientParseError] (Union as)
 tryParsers' _ Nil = Left [ClientNoMatchingStatus]
 tryParsers' status (Comp x :* xs)
-  | status == statusOf (Comp x)
-  = case partitionEithers x of
-    (err', []) -> (map ClientParseError err' ++) +++ S $ tryParsers' status xs
-    (_, (res:_)) -> Right . inject . Identity $ res
-  | otherwise -- no reason to parse in the first place. This ain't the one we're looking for
-  = (ClientStatusMismatch:) +++ S $ tryParsers' status xs
-
+  = if status == statusOf (Comp x)
+      then case partitionEithers x of
+        (err', []) -> (map ClientParseError err' ++) +++ S $ tryParsers' status xs
+        (_, (res:_)) -> Right . inject . Identity $ res
+      else -- no reason to parse in the first place. This ain't the one we're looking for
+        (ClientStatusMismatch:) +++ S $ tryParsers' status xs
 
 -- | Given a list of types, parses the given response body as each type
 mimeUnrenders
