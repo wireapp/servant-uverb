@@ -6,3 +6,6 @@ packages:
 - servant-uverb-mock
 - servant-uverb-server
 - servant-uverb-swagger
+
+extra-deps:
+- bytestring-0.10.10.0@sha256:06b2e84f1bc9ab71a162c0ca9e88358dd6bbe5cb7fdda2d6d34b6863c367ec95,8944
