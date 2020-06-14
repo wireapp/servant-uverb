@@ -8,20 +8,19 @@ module Servant.Server.UVerb
 where
 
 import Data.ByteString (ByteString)
-import Data.Functor.Identity
+import Data.Functor.Identity (Identity(Identity))
 import Data.Maybe (fromMaybe)
-import Data.SOP.BasicFunctors
-import Data.SOP.Constraint
-import Data.SOP.NS
-import Data.String.Conversions
-import Data.Typeable
-import Network.HTTP.Types
+import Data.SOP.BasicFunctors (K(K))
+import Data.SOP.Constraint (All, And)
+import Data.SOP.NS (cmap_NS, collapse_NS)
+import Data.String.Conversions (LBS, cs)
+import Data.Proxy (Proxy(Proxy))
+import Network.HTTP.Types (Status, hAccept, hContentType)
 import Network.Wai (requestHeaders, responseLBS)
 import Servant (ReflectMethod, reflectMethod)
-import Servant.API.ContentTypes
-import Servant.API.UVerb
-import Servant.Server
-import Servant.Server.Internal
+import Servant.API.ContentTypes (AcceptHeader(AcceptHeader), AllCTRender(handleAcceptH), AllMime)
+import Servant.API.UVerb (HasStatus, IsMember, Statuses, Union, Unique, UVerb, inject, statusOf)
+import Servant.Server.Internal (Context, Delayed, Handler, HasServer(..), RouteResult(FailFatal, Route), Router, Server, ServerT, acceptCheck, addAcceptCheck, addMethodCheck, allowedMethodHead, ct_wildcard, err406, leafRouter, methodCheck, runAction)
 
 
 -- | 'return' for 'UVerb' handlers.  Takes a value of any of the members of the open union,
