@@ -1,84 +1,67 @@
-{-# LANGUAGE ConstraintKinds
-, AllowAmbiguousTypes
-, DataKinds
-, InstanceSigs
-, DeriveFunctor
-, DeriveGeneric
-, DerivingStrategies
-, DerivingVia
-, DuplicateRecordFields
-, FlexibleContexts
-, FlexibleInstances
-, GeneralizedNewtypeDeriving
-, InstanceSigs
-, KindSignatures
-, LambdaCase
-, MultiParamTypeClasses
-, OverloadedStrings
-, PolyKinds
-, RankNTypes
-, RecordWildCards
-, ScopedTypeVariables
-, StandaloneDeriving
-, TupleSections
-, TypeApplications
-, TypeOperators
-, TypeFamilies
-, UndecidableInstances
-, ViewPatterns
-#-}
+{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE UndecidableInstances #-}
 
-{-# OPTIONS_GHC -Wno-unused-imports #-}
+{-# OPTIONS_GHC -Wall #-}
 
-import Network.HTTP.Types
-import Servant.API (StdMethod(..), JSON, (:<|>)((:<|>)), (:>), Capture)
-import Servant.Server
-import Data.ByteString (ByteString)
+-- misc stuff
+import Control.Arrow ((+++), left)
 import Control.Concurrent.Async
+import Control.Monad.Identity
+
 import Data.Aeson
-import Servant.Client
+import Data.ByteString (ByteString)
+import qualified Data.ByteString.Lazy as LB
+import Data.Either (partitionEithers)
+import Data.Foldable (toList)
+import Data.Maybe (fromMaybe)
+import Data.Proxy
+import qualified Data.Sequence as Seq
+import Data.String.Conversions
+import qualified Data.Text as T
+
 import qualified GHC.Generics as GHC
 import GHC.TypeLits
-import Data.SOP.NS
-import Control.Monad.Identity
-import Data.Proxy
-import Servant.API.UVerb.OpenUnion
-import qualified Network.Wai.Handler.Warp as Warp
 
-import Control.Arrow ((+++))
-import Data.Either (partitionEithers)
-import Data.Maybe (fromMaybe)
-import qualified Network.Wai as Wai
-import Data.Proxy
+-- sop-core
 import Data.SOP.BasicFunctors
 import Data.SOP.Constraint
+import Data.SOP.NP (NP(..), cpure_NP)
 import Data.SOP.NS
-import Data.String.Conversions
-import Network.HTTP.Types (Status, hContentType, hAccept)
+
+-- network stuff
+import Network.HTTP.Media (MediaType, matches, parseAccept, (//))
+import Network.HTTP.Types
 import Network.Wai (requestHeaders, responseLBS)
-import Servant.API.ContentTypes
+import qualified Network.Wai.Handler.Warp as Warp
+
+-- servant
 import Servant (ReflectMethod, reflectMethod)
+import Servant.API ((:<|>)((:<|>)), (:>), Capture)
+import Servant.API.UVerb.OpenUnion
+import Servant.API.ContentTypes
+import Servant.Client
+import Servant.Client.Core (RunClient(..), runRequest, requestMethod, requestAccept)
+import Servant.Server
 import Servant.Server.Internal
 
-import qualified Data.ByteString.Lazy as LB
-import Data.Foldable (toList)
-import Data.Proxy (Proxy(Proxy))
-import Data.SOP.BasicFunctors ((:.:)(Comp))
-import Data.SOP.Constraint(All, And, Compose)
 
-import Data.SOP.NP (NP(..), cpure_NP)
-import Servant.API.ContentTypes (MimeUnrender(mimeUnrender), Accept, contentTypes)
-import Servant.API (ReflectMethod(reflectMethod))
-import Servant.Client.Core (ClientError(..), HasClient(Client, hoistClientMonad, clientWithRoute), RunClient(..), runRequest, requestMethod, responseStatusCode, responseBody, requestAccept)
 
-import Servant.Client.Core.Response
-import Network.HTTP.Media (MediaType, parseAccept, (//))
 
-import qualified Data.Sequence as Seq
-import qualified Data.Text as T
-import           Network.HTTP.Media                   (matches)
-import           Network.HTTP.Types (Status)
-import Control.Monad (unless)
 
 
 
@@ -192,33 +175,28 @@ checkContentTypeHeader response =
       Nothing -> throwClientError $ InvalidContentTypeHeader response
       Just t' -> return t'
 
--- TODO; better name.
-proxyOf' :: f a -> Proxy a
-proxyOf' _ = Proxy
-
-data ClientParseError = ClientParseError String | ClientStatusMismatch | ClientNoMatchingStatus
+data ClientParseError = ClientParseError MediaType String | ClientStatusMismatch | ClientNoMatchingStatus
   deriving (Eq, Show, GHC.Generic)
 
 -- | Given a list of parsers of 'mkres', returns the first one that succeeds and all the
 -- failures it encountered along the way
 -- TODO; better name, rewrite haddocs.
-tryParsers' :: All HasStatus as => Status -> NP ([] :.: Either String) as -> Either [ClientParseError] (Union as)
+tryParsers' :: All HasStatus as => Status -> NP ([] :.: Either (MediaType, String)) as -> Either [ClientParseError] (Union as)
 tryParsers' _ Nil = Left [ClientNoMatchingStatus]
 tryParsers' status (Comp x :* xs)
-  = if status == statusOf (Comp x)
-      then case partitionEithers x of
-        (err', []) -> (map ClientParseError err' ++) +++ S $ tryParsers' status xs
-        (_, (res:_)) -> Right . inject . Identity $ res
-      else -- no reason to parse in the first place. This ain't the one we're looking for
-        (ClientStatusMismatch:) +++ S $ tryParsers' status xs
+  | status == statusOf (Comp x)
+  = case partitionEithers x of
+    (err', []) -> (map (uncurry ClientParseError) err' ++) +++ S $ tryParsers' status xs
+    (_, (res:_)) -> Right . inject . Identity $ res
+  | otherwise -- no reason to parse in the first place. This ain't the one we're looking for
+  = (ClientStatusMismatch:) +++ S $ tryParsers' status xs
+
 
 -- | Given a list of types, parses the given response body as each type
 mimeUnrenders
   :: forall contentTypes as . All (AllMimeUnrender contentTypes) as
-  => LB.ByteString -> NP ([] :.: Either String) as
-mimeUnrenders body = cpure_NP
-  (Proxy @(AllMimeUnrender contentTypes))
-  (Comp . map (\(_, parser) -> parser body) $ allMimeUnrender (Proxy @contentTypes))
+  => Proxy contentTypes -> LB.ByteString -> NP ([] :.: Either (MediaType, String)) as
+mimeUnrenders ctp body = cpure_NP (Proxy @(AllMimeUnrender contentTypes)) (Comp . map (\(mediaType, parser) -> left ((,) mediaType) (parser body)) . allMimeUnrender $ ctp)
 
 instance
   ( RunClient m
@@ -234,9 +212,6 @@ instance
 
   clientWithRoute _ _ request = do
     let accept = Seq.fromList . allMime $ Proxy @contentTypes
-        -- TODO: we want to send an accept header with, say, the first content type supported
-        -- by the api, so we don't have to parse all of them, no?
-
         method = reflectMethod $ Proxy @method
     response <- runRequest request { requestMethod = method, requestAccept = accept }
     responseContentType <- checkContentTypeHeader response
@@ -245,7 +220,7 @@ instance
 
     let status = responseStatusCode response
         body = responseBody response
-        res = tryParsers' status $ mimeUnrenders @contentTypes @as body
+        res = tryParsers' status $ mimeUnrenders (Proxy @contentTypes) body
     case res of
       Left errors -> throwClientError $ DecodeFailure (T.pack (show errors)) response
       Right x -> return x
