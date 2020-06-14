@@ -1,67 +1,87 @@
-{-# OPTIONS_GHC -Wno-orphans -Wno-unused-imports #-}
-module Servant.Server.UVerb () where
+{-# OPTIONS_GHC -Wno-orphans #-}
 
+module Servant.Server.UVerb
+  ( respond,
+    IsServerResource,
+  )
+where
+
+import Control.Monad.Identity
+import Data.ByteString (ByteString)
 import Data.Maybe (fromMaybe)
-import Data.Proxy
 import Data.SOP.BasicFunctors
 import Data.SOP.Constraint
 import Data.SOP.NS
 import Data.String.Conversions
-import Network.HTTP.Types (Status, hContentType, hAccept)
+import Data.Typeable
+import Network.HTTP.Types
 import Network.Wai (requestHeaders, responseLBS)
-import Servant.API.ContentTypes
-import Servant.API.ContentTypes (AcceptHeader (..), AllCTRender (..))
 import Servant (ReflectMethod, reflectMethod)
-import Servant.Server.Internal
+import Servant.API.ContentTypes
 import Servant.API.UVerb
+import Servant.Server
+import Servant.Server.Internal
 
+-- | 'return' for 'UVerb' handlers.  Takes a value of any of the members of the open union,
+-- and will construct a union value in an 'Applicative' (eg. 'Server').
+respond ::
+  forall (x :: *) (xs :: [*]) (f :: * -> *).
+  (Applicative f, HasStatus x, IsMember x xs) =>
+  x ->
+  f (Union xs)
+respond = pure . inject . Identity
 
 -- | Helper constraint used in @instance 'HasServer' 'UVerb'@.
-type IsResource cts mkres =
-  Compose (AllCTRender cts) mkres `And`
-    HasStatus mkres `And`
-    MakesResource mkres
+type IsServerResource contentTypes = AllCTRender contentTypes `And` HasStatus
 
 instance
-  ( ReflectMethod method
-  , AllMime cts
-  , All (IsResource cts mkres) resources
-  , MakesUVerb mkres method cts resources
-  ) => HasServer (UVerb mkres method cts resources) context where
-
-  type ServerT (UVerb mkres method cts resources) m = m (NS mkres resources)
+  ( ReflectMethod method,
+    AllMime contentTypes,
+    All (IsServerResource contentTypes) as,
+    Unique (Statuses as) -- for consistency with servant-swagger (server would work fine
+        -- wihtout; client is a bit of a corner case, because it dispatches
+        -- the parser based on the status code.  with this uniqueness
+        -- constraint it won't have to run more than one parser in weird
+        -- corner cases.
+  ) =>
+  HasServer (UVerb method contentTypes as) context
+  where
+  type ServerT (UVerb method contentTypes as) m = m (Union as)
 
   hoistServerWithContext _ _ nt s = nt s
 
-  route Proxy _ctx action = leafRouter route'
+  route ::
+    forall env.
+    Proxy (UVerb method contentTypes as) ->
+    Context context ->
+    Delayed env (Server (UVerb method contentTypes as)) ->
+    Router env
+  route _proxy _ctx action = leafRouter route'
     where
       method = reflectMethod (Proxy @method)
-
       route' env request cont = do
-        let accH = fromMaybe ct_wildcard $ lookup hAccept $ requestHeaders request
-            action' = action
+        let accH :: ByteString -- for picking the content type.
+            accH = fromMaybe ct_wildcard $ lookup hAccept $ requestHeaders request
+            action' :: Delayed env (Handler (Union as))
+            action' =
+              action
                 `addMethodCheck` methodCheck method request
-                `addAcceptCheck` acceptCheck (Proxy @cts) accH
-
+                `addAcceptCheck` acceptCheck (Proxy @contentTypes) accH
             mkProxy :: a -> Proxy a
             mkProxy _ = Proxy
 
-        runAction action' env request cont $ \(output :: NS mkres resources) -> do
-          let encodeResource
-                :: forall resource.
-                   IsResource cts mkres resource =>
-                   mkres resource -> K (Status, Maybe (LBS, LBS)) resource
-              encodeResource res = K
-                  ( getStatus $ mkProxy res
-                  , handleAcceptH (Proxy @cts) (AcceptHeader accH) res
+        runAction action' env request cont $ \(output :: Union as) -> do
+          let encodeResource :: (AllCTRender contentTypes a, HasStatus a) => Identity a -> K (Status, Maybe (LBS, LBS)) a
+              encodeResource (Identity res) =
+                K
+                  ( statusOf $ mkProxy res,
+                    handleAcceptH (Proxy @contentTypes) (AcceptHeader accH) res
                   )
-
-              pickResource
-                :: NS mkres resources -> (Status, Maybe (LBS, LBS))
-              pickResource = collapse_NS . cmap_NS (Proxy @(IsResource cts mkres)) encodeResource
+              pickResource :: Union as -> (Status, Maybe (LBS, LBS))
+              pickResource = collapse_NS . cmap_NS (Proxy @(IsServerResource contentTypes)) encodeResource
 
           case pickResource output of
             (_, Nothing) -> FailFatal err406 -- this should not happen (checked before), so we make it fatal if it does
             (status, Just (contentT, body)) ->
               let bdy = if allowedMethodHead method request then "" else body
-              in Route $ responseLBS status ((hContentType, cs contentT) : []) bdy
+               in Route $ responseLBS status ((hContentType, cs contentT) : []) bdy
