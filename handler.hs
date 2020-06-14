@@ -89,6 +89,10 @@ class KnownStatus (StatusOf a) => HasStatus (a :: *) where
 statusOf :: forall a proxy. HasStatus a => proxy a -> Status
 statusOf = const (statusVal (Proxy :: Proxy (StatusOf a)))
 
+type family Statuses (as :: [*]) :: [Nat]
+type instance Statuses '[] = '[]
+type instance Statuses (a ': as) = StatusOf a ': Statuses as
+
 newtype WithStatus (k :: Nat) a = WithStatus a
   deriving (Eq, Show, GHC.Generic)
 
@@ -121,6 +125,11 @@ instance
   ( ReflectMethod method
   , AllMime contentTypes
   , All (IsServerResource contentTypes) as
+  , Unique (Statuses as)  -- for consistency with servant-swagger (server would work fine
+                          -- wihtout; client is a bit of a corner case, because it dispatches
+                          -- the parser based on the status code.  with this uniqueness
+                          -- constraint it won't have to run more than one parser in weird
+                          -- corner cases.
   ) => HasServer (UVerb method contentTypes as) context where
 
   type ServerT (UVerb method contentTypes as) m = m (Union as)
@@ -207,6 +216,7 @@ instance
   , ReflectMethod method
   , All (AllMimeUnrender contentTypes) as
   , All HasStatus as
+  , Unique (Statuses as)
   ) => HasClient m (UVerb method contentTypes as) where
 
   type Client m (UVerb method contentTypes as) = m (Union as)
@@ -247,6 +257,9 @@ extractUResp = collapse_NS . cmap_NS (Proxy @Typeable) (K . cast . runIdentity)
 
 
 {-
+
+... Unique (Statuses as)
+
 
 instance (HasSwagger (UVerb 'GET '[JSON] '[WithStatus 201 ArianUser])) where
 

@@ -6,7 +6,7 @@ module Servant.API.UVerb.OpenUnion
 , RIndex
 , Elem
 , UElem(..)
-, Nubbed
+, Unique
 , CheckElemIsMember
 , NoElementError
 , DuplicateElementError
@@ -17,6 +17,7 @@ import Data.SOP.Constraint
 import Data.SOP.NS
 import GHC.TypeLits
 import Servant.API (If)
+import Data.Type.Equality (type (==))
 
 
 -- * Stuff stolen from 'Data.WorldPeace" but for generics-sop
@@ -56,6 +57,9 @@ instance ( RIndex a (b ': as) ~ ('S_ i) , UElem a as i) => UElem a (b ': as) ('S
   match y = case y of
     Z _ -> Nothing
     S z -> match z
+
+type family Unique xs :: Constraint where
+  Unique xs = If (Nubbed xs == 'True) (() ~ ()) (TypeError (DuplicateElementError xs))
 
 type family Nubbed xs :: Bool where
   Nubbed '[] = 'True
