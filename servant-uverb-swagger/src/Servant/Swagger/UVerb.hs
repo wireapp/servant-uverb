@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
-module Servant.Swagger.UVerb (aaargh) where
+module Servant.Swagger.UVerb () where
 
 import Data.Proxy
 import Data.Swagger
