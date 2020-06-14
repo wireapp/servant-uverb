@@ -28,7 +28,7 @@ combineSwagger :: Swagger -> Swagger -> Swagger
 combineSwagger s t = Swagger
   { _swaggerInfo = _swaggerInfo s <> _swaggerInfo t
   , _swaggerHost = _swaggerHost s <|> _swaggerHost t
-  , _swaggerBasePath = _swaggerBasePath s <> _swaggerBasePath t
+  , _swaggerBasePath = _swaggerBasePath s <|> _swaggerBasePath t
   , _swaggerSchemes = _swaggerSchemes s <> _swaggerSchemes t
   , _swaggerConsumes = _swaggerConsumes s <> _swaggerConsumes t
   , _swaggerProduces = _swaggerProduces s <> _swaggerProduces t
@@ -39,7 +39,7 @@ combineSwagger s t = Swagger
   , _swaggerSecurityDefinitions = _swaggerSecurityDefinitions s <> _swaggerSecurityDefinitions t
   , _swaggerSecurity = _swaggerSecurity s <> _swaggerSecurity t
   , _swaggerTags = _swaggerTags s <> _swaggerTags t
-  , _swaggerExternalDocs = _swaggerExternalDocs s <> _swaggerExternalDocs t
+  , _swaggerExternalDocs = _swaggerExternalDocs s <|> _swaggerExternalDocs t
   }
 
 instance HasSwagger (UVerb method cs '[]) where
