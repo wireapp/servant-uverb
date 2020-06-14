@@ -18,13 +18,14 @@
 {-# OPTIONS_GHC -Wall -Wno-orphans #-}
 
 import Control.Concurrent (threadDelay)
-import Control.Concurrent.Async
-import Data.Aeson
+import Control.Concurrent.Async (async)
+import Data.Aeson (FromJSON (..), ToJSON (..))
+import Data.Aeson.Encode.Pretty (encodePretty)
+import Data.String.Conversions (cs)
 import Data.Swagger (ToSchema)
-import Data.Typeable
+import Data.Typeable (Proxy (Proxy))
 import qualified GHC.Generics as GHC
 import qualified Network.HTTP.Client as Client
-import Network.HTTP.Types
 import qualified Network.Wai.Handler.Warp as Warp
 import Servant.API
 import Servant.API.UVerb
@@ -33,7 +34,7 @@ import Servant.Client.UVerb
 import Servant.Server
 import Servant.Server.UVerb
 import Servant.Swagger
-import Servant.Swagger.UVerb
+import Servant.Swagger.UVerb ()
 
 data FisxUser = FisxUser {name :: String}
   deriving (Eq, Show, GHC.Generic)
@@ -88,6 +89,7 @@ arianClient :: ClientM (Union '[WithStatus 201 ArianUser])
 
 main :: IO ()
 main = do
+  putStrLn . cs . encodePretty $ toSwagger (Proxy @API)
   _ <- async . Warp.run 8080 $ serve (Proxy @API) handler
   threadDelay 50000
   mgr <- Client.newManager Client.defaultManagerSettings
@@ -96,8 +98,4 @@ main = do
   print $ collapseUResp (Proxy @Show) show <$> result
   print $ extractUResp @FisxUser <$> result
   print $ extractUResp @(WithStatus 303 String) <$> result
-  print $ toSwagger (Proxy @API)
   pure ()
-
--- TODO: UStream (like 'Stream')
--- TODO: NoContentUVerb (like 'NoContentVerb')

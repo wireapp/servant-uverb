@@ -10,6 +10,13 @@
 more docs coming up!
 
 
+TODO:
+
+- [ ] `UStream` (like `Stream`)
+- [ ] `NoContentUVerb` (like `NoContentVerb`)
+- [ ] Tests
+
+
 This set of packages allows you to write servant code for end-points
 whose response types are open unions of types (`UVerb` is short for
 `UnionVerb`)
