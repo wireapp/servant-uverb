@@ -18,6 +18,10 @@
 
 {-# OPTIONS_GHC -Wall #-}
 
+import qualified Network.HTTP.Client as Client
+import Control.Concurrent (threadDelay)
+import Data.Typeable
+
 -- misc stuff
 import Control.Arrow ((+++), left)
 import Control.Concurrent.Async
@@ -29,7 +33,6 @@ import qualified Data.ByteString.Lazy as LB
 import Data.Either (partitionEithers)
 import Data.Foldable (toList)
 import Data.Maybe (fromMaybe)
-import Data.Proxy
 import qualified Data.Sequence as Seq
 import Data.String.Conversions
 import qualified Data.Text as T
@@ -91,7 +94,7 @@ statusOf :: forall a proxy. HasStatus a => proxy a -> Status
 statusOf = const (statusVal (Proxy :: Proxy (StatusOf a)))
 
 newtype WithStatus (k :: Nat) a = WithStatus a
-  deriving (GHC.Generic)
+  deriving (Eq, Show, GHC.Generic)
 
 instance KnownStatus n => HasStatus (WithStatus n a) where
   type StatusOf (WithStatus n a) = n
@@ -212,6 +215,10 @@ instance
 
   clientWithRoute _ _ request = do
     let accept = Seq.fromList . allMime $ Proxy @contentTypes
+        -- TODO(fisx): we want to send an accept header with, say, the first content type
+        -- supported by the api, so we don't have to parse all of them, no?  not sure i'm
+        -- missing anything here.
+
         method = reflectMethod $ Proxy @method
     response <- runRequest request { requestMethod = method, requestAccept = accept }
     responseContentType <- checkContentTypeHeader response
@@ -227,12 +234,21 @@ instance
 
   hoistClientMonad _ _ nt s = nt s
 
+-- | convenience function to extract an unknown union element using a type class.
+collapseUResp :: forall c a as. All c as
+  => Proxy (c :: * -> Constraint) -> (forall x. c x => x -> a) -> Union as -> a
+collapseUResp proxy render = collapse_NS . cmap_NS proxy (K . render . runIdentity)
+
+-- | convenience function to extract an unknown union element using 'cast'.
+extractUResp :: forall a as. (All Typeable as, Typeable a) => Union as -> Maybe a
+extractUResp = collapse_NS . cmap_NS (Proxy @Typeable) (K . cast . runIdentity)
+
 
 -- * example use case
 --
 
 data FisxUser = FisxUser { name :: String }
-  deriving (GHC.Generic)
+  deriving (Eq, Show, GHC.Generic)
 
 instance ToJSON FisxUser
 instance FromJSON FisxUser
@@ -248,7 +264,7 @@ instance HasStatus FisxUser where
   type StatusOf FisxUser = 203
 
 data ArianUser = ArianUser
-  deriving (GHC.Generic)
+  deriving (Eq, Show, GHC.Generic)
 
 instance ToJSON ArianUser
 instance FromJSON ArianUser
@@ -277,6 +293,13 @@ arianClient :: ClientM (Union '[WithStatus 201 ArianUser])
 
 main :: IO ()
 main = do
-  _src <- async . Warp.run 8080 $ serve (Proxy @API) handler
-  _ <- undefined
+  _ <- async . Warp.run 8080 $ serve (Proxy @API) handler
+  threadDelay 50000
+  mgr <- Client.newManager Client.defaultManagerSettings
+  let cenv = mkClientEnv mgr (BaseUrl Http "localhost" 8080 "")
+  result <- runClientM (fisxClient True) cenv
+  print $ collapseUResp (Proxy @Show) show <$> result
+  print $ extractUResp @FisxUser <$> result
+  print $ extractUResp @(WithStatus 303 String) <$> result
+
   pure ()
