@@ -1,116 +1,69 @@
+-- | An alternative to 'Verb' for end-points that respond with a resource value of any of an
+-- open union of types, and specific status codes for each type in this union.  (`UVerb` is
+-- short for `UnionVerb`)
+--
+-- This can be used for returning (rather than throwing) exceptions in a server as in, say
+-- @'[Report, WaiError]@; or responding with either a 303 forward with a location header, or
+-- 201 created with a different body type, depending on the circumstances.  (All of this can
+-- be done with vanilla servant-server by throwing exceptions, but it can't be represented in
+-- the API types.)
 module Servant.API.UVerb
-  ( UVerb
-  , HasStatus, getStatus
-  , MakesResource, mkResource
-  , MakesUVerb
-  , respond
-  , module Servant.API.UVerb.OpenUnion
-  ) where
+  ( UVerb,
+    Union,
+    HasStatus,
+    StatusOf,
+    statusOf,
+    Statuses,
+    WithStatus (..),
+    module Servant.API.UVerb.OpenUnion,
+  )
+where
 
-import Data.SOP.NS
-import Data.SOP.Constraint
-import Network.HTTP.Types (Status)
-import Servant.API (StdMethod)
+import Control.Monad.Identity (Identity)
+import Data.SOP.NS (NS)
+import Data.Typeable (Proxy (Proxy))
+import qualified GHC.Generics as GHC
+import GHC.TypeLits (KnownNat, Nat)
+import Network.HTTP.Types (Status, StdMethod, status201, status203, status303)
 import Servant.API.UVerb.OpenUnion
 
+class KnownStatus (StatusOf a) => HasStatus (a :: *) where
+  type StatusOf (a :: *) :: Nat
 
-{- | An alternative to 'Verb' for end-points that respond with a resource value of any of an
-open union of types, and specific status codes for each type in this union.  (`UVerb` is short
-for `UnionVerb`)
+statusOf :: forall a proxy. HasStatus a => proxy a -> Status
+statusOf = const (statusVal (Proxy :: Proxy (StatusOf a)))
 
-This can be used for returning (rather than throwing) exceptions in a server as in, say
-@'[Report, WaiError]@; or responding with either a 303 forward with a location header, or 201
-created with a different body type, depending on the circumstances.  (All of this can be done
-with vanilla servant-server, but it can't be represented in the API types.)
+type family Statuses (as :: [*]) :: [Nat]
 
-See 'MakesResource' docs for an explanation of @mkres@.  Like in 'Verb', @method@ is the HTTP
-method and @cts@ is the list of response content types, resp.
+type instance Statuses '[] = '[]
 
+type instance Statuses (a ': as) = StatusOf a ': Statuses as
 
-=== Design rationale
+newtype WithStatus (k :: Nat) a = WithStatus a
+  deriving (Eq, Show, GHC.Generic)
 
-You could also use open union types in combination with 'Verb' rather than 'UVerb', but only
-if all members of the union have the same response status code.
+instance KnownStatus n => HasStatus (WithStatus n a) where
+  type StatusOf (WithStatus n a) = n
 
-It would have been nice to have individual content type lists for different resources in the
-union, perhaps something like:
+-- FUTUREWORK:
+-- @type Verb method statusCode contentTypes a = UVerb method contentTypes [WithStatus statusCode a]@
+-- no, wait, this is not the same.  this would mean people would have to use 'respond' instead
+-- of 'pure' or 'return'.
+data UVerb (method :: StdMethod) (contentTypes :: [*]) (as :: [*])
 
->>> data UVerb (mkres :: * -> *) (method :: StdMethod) (resources :: [*])
->>>
->>> class HasCts (resource :: *) where
->>>   type Cts resource :: [*]
+type Union = NS Identity
 
-This has two obvious implementations which are equally bad:
+-- this just went into master on servant: https://github.com/haskell-servant/servant/pull/1310
+-- "Servant.API.Status"
 
-(a) Content negotiation happens with 'addAcceptCheck' before the handler is called.  Then we
-    don't know what the supported response content types will be, because that depends on what
-    item of the union the handler will return later.  We could compute the intersection of all
-    items in the union and process the accept header based on that, but that seems complicated
-    and weird.
+class KnownNat n => KnownStatus n where
+  statusVal :: proxy n -> Status
 
-(b) Content negotiation happens *after* the handler is called, but 'fmap'-ping a function @::
-    Route a -> Route a@ into the 'Delayed' response.  Then the handler would be called with
-    all the effects it may have (touching the database, sending out emails, ...) by the time
-    the response is @406 bad Accept header@.  This is at best confusing.
+instance KnownStatus 201 where
+  statusVal = const status201
 
-What we would need is a handler monad that supports commit and rollback of all effects in
-'runDelayed', after the handler has been executed.  This is an interesting project, but it
-escapes the scope of this library.  So we force every member of the union to implement all
-content type encodings.
+instance KnownStatus 203 where
+  statusVal = const status203
 
--}
-data UVerb (mkres :: * -> *) (method :: StdMethod) (cts :: [*]) (resources :: [*])
-
-{- | Associate every resource mentioned in a 'UVerb' resources list with its status code.
-
-'getStatus' takes a proxy because some use cases (eg., servant-uverb-swagger,
-servant-uverb-client) have no resource values to pass in here.
-
-See 'MakesResource' docs for an explanation of @mkres@.
-
-
-=== Design rationale
-
-You may want to add the status info directly to the resource type, rather than having to go to
-a place outside the routing table and write a very boring instance the fixes it.  This way you
-could also use the same resource type with two different status codes in two different
-end-points.
-
-We could accomplish that in a way similar to 'Header'.  The difference is that the header name
-in the type corresponds to a header value that needs to be set by the handler at run-time; but
-the status code in the type is phantom, and doesn't correspond to anything the handler does.
-So in the handler, we have to repetitively add the status code either as a type application or
-as a proxy argument.
-
-This can certainly be done, but we chose the path where writing the routing table is
-syntactically a little less elegant, but in return the author of the handler only needs to
-provide information that is not already determined statically.
-
--}
-class HasStatus (mkres :: * -> *) (resource :: *) where
-  getStatus :: forall (proxy :: * -> *). proxy (mkres resource) -> Status
-
-{- | @mkres@ is usually a @newtype@ wrapper, but it needs to be introduced near the application
-types so you can write 'HasStatus' instances of @mkres T@ for any application type @T@ without
-introducing orphans.  Having this newtype lets you do this for as many @T@ as you need at the
-cost of a single @newtype@.
-
-'MakeResource' is the type class that lets the 'UVerb' mechanics wrap a value of any
-application type into that newtype.
-
--}
-class MakesResource (mkres :: * -> *) (resource :: *) where
-  mkResource :: resource -> mkres resource
-
-type MakesUVerb mkres method cts resources =
-  ( All (HasStatus mkres) resources
-  , All (MakesResource mkres) resources
-  )
-
--- | 'return' for 'UVerb' handlers.  Pass it a value of an application type from the routing
--- table, and it will return a value of the union of responses.
-respond
-  :: forall (f :: * -> *) (mkres :: * -> *) (x :: *) (xs :: [*]).
-     (Applicative f, MakesResource mkres x, IsMember x xs)
-  => x -> f (NS mkres xs)
-respond = pure . inject . mkResource
+instance KnownStatus 303 where
+  statusVal = const status303
