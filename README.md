@@ -7,19 +7,20 @@
 [![Build status](https://img.shields.io/travis/fisx/servant-uverb.svg?logo=travis)](https://travis-ci.org/fisx/servant-uverb)
 
 
-more docs coming up!
+This set of packages allows you to write servant code for end-points
+whose response types are open unions of types (`UVerb` is short for
+`UnionVerb`).  It should be merged into the resp. servant packages at
+some point in the future, but mostly for the sake of making it easier
+to maintan it; it's ready to be used now.
 
 
-TODO:
+### TODO
 
 - [ ] `UStream` (like `Stream`)
 - [ ] `NoContentUVerb` (like `NoContentVerb`)
 - [ ] Tests
-
-
-This set of packages allows you to write servant code for end-points
-whose response types are open unions of types (`UVerb` is short for
-`UnionVerb`)
+- [ ] make `./example` a self-contained package.
+- [ ] convert this list into issues.
 
 
 ### Related work
