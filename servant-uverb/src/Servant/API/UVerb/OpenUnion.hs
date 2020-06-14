@@ -1,15 +1,8 @@
 -- | Type-level code for implementing and using 'UVerb'.
 module Servant.API.UVerb.OpenUnion
 ( IsMember
-, Contains
-, Nat_(..)
-, RIndex
-, Elem
-, UElem(..)
 , Unique
-, CheckElemIsMember
-, NoElementError
-, DuplicateElementError
+, inject
 )
 where
 
@@ -21,6 +14,7 @@ import Data.Type.Equality (type (==))
 
 
 -- * Stuff stolen from 'Data.WorldPeace" but for generics-sop
+-- TODO: could much of this go into sop-core?
 
 type IsMember (a :: u) (as :: [u]) = (CheckElemIsMember a as, UElem a as (RIndex a as))
 
