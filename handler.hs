@@ -97,6 +97,8 @@ instance KnownStatus n => HasStatus (WithStatus n a) where
 
 -- FUTUREWORK:
 -- @type Verb method statusCode contentTypes a = UVerb method contentTypes [WithStatus statusCode a]@
+-- no, wait, this is not the same.  this would mean people would have to use 'respond' instead
+-- of 'pure' or 'return'.
 data UVerb (method :: StdMethod) (contentTypes :: [*]) (as :: [*])
 
 type Union = NS Identity
