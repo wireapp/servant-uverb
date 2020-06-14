@@ -21,7 +21,7 @@
 import qualified Network.HTTP.Client as Client
 import Control.Concurrent (threadDelay)
 import Data.Typeable
-import Servant.Swagger
+-- import Servant.Swagger
 
 -- misc stuff
 import Control.Arrow ((+++), left)
@@ -272,7 +272,6 @@ instance (AllAccept cs, AllToResponseHeader hs, KnownNat status, SwaggerMethod m
 
 instance (SwaggerMethod method) => HasSwagger (NoContentVerb method) where
   toSwagger =  mkEndpointNoContentVerb "/"
--}
 
 
 -- | Make a singleton Swagger spec (with only one endpoint).
@@ -332,6 +331,7 @@ mkUEndpointNoContentVerb path _ = mempty
     code                 = 204 -- hardcoded in servant-server
 
 
+-}
 
 
 
