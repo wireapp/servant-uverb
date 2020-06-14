@@ -58,7 +58,13 @@ common standard-things
 
 library
   import:              standard-things
-  build-depends:       servant-uverb == 0.0.1
+  build-depends:       servant-uverb == 0.0.1,
+                       servant,
+                       servant-swagger,
+                       swagger2,
+                       sop-core,
+                       insert-ordered-containers,
+                       http-types
   hs-source-dirs:      src
   exposed-modules:     Servant.Swagger.UVerb
 

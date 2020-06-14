@@ -20,6 +20,7 @@
 import Control.Concurrent (threadDelay)
 import Control.Concurrent.Async
 import Data.Aeson
+import Data.Swagger (ToSchema)
 import Data.Typeable
 import qualified GHC.Generics as GHC
 import qualified Network.HTTP.Client as Client
@@ -31,6 +32,8 @@ import Servant.Client
 import Servant.Client.UVerb
 import Servant.Server
 import Servant.Server.UVerb
+import Servant.Swagger
+import Servant.Swagger.UVerb
 
 data FisxUser = FisxUser {name :: String}
   deriving (Eq, Show, GHC.Generic)
@@ -49,12 +52,16 @@ instance FromJSON FisxUser
 instance HasStatus FisxUser where
   type StatusOf FisxUser = 203
 
+instance ToSchema FisxUser
+
 data ArianUser = ArianUser
   deriving (Eq, Show, GHC.Generic)
 
 instance ToJSON ArianUser
 
 instance FromJSON ArianUser
+
+instance ToSchema ArianUser
 
 instance (GHC.Generic (WithStatus n a), ToJSON a) => ToJSON (WithStatus n a)
 
@@ -89,7 +96,7 @@ main = do
   print $ collapseUResp (Proxy @Show) show <$> result
   print $ extractUResp @FisxUser <$> result
   print $ extractUResp @(WithStatus 303 String) <$> result
-  -- print $ toSwagger (Proxy @API)
+  print $ toSwagger (Proxy @API)
   pure ()
 
 -- TODO: UStream (like 'Stream')
