@@ -234,6 +234,9 @@ instance
 
   clientWithRoute _ _ request = do
     let accept = Seq.fromList . allMime $ Proxy @contentTypes
+        -- TODO: we want to send an accept header with, say, the first content type supported
+        -- by the api, so we don't have to parse all of them, no?
+
         method = reflectMethod $ Proxy @method
     response <- runRequest request { requestMethod = method, requestAccept = accept }
     responseContentType <- checkContentTypeHeader response
