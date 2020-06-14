@@ -19,7 +19,7 @@ module Servant.API.UVerb
   )
 where
 
-import Control.Monad.Identity (Identity)
+import Data.Functor.Identity (Identity)
 import Data.SOP.NS (NS)
 import Data.Typeable (Proxy (Proxy))
 import qualified GHC.Generics as GHC
