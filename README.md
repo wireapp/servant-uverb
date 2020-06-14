@@ -13,6 +13,8 @@ whose response types are open unions of types (`UVerb` is short for
 some point in the future, but mostly for the sake of making it easier
 to maintan it; it's ready to be used now.
 
+Take a look at `./example/Main.hs` to get an idea how it works.
+
 
 ### TODO
 
