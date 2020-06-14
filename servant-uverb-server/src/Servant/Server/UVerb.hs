@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
+{-# OPTIONS_GHC -Wno-redundant-constraints #-}
 
 module Servant.Server.UVerb
   ( respond,
@@ -6,8 +7,8 @@ module Servant.Server.UVerb
   )
 where
 
-import Control.Monad.Identity
 import Data.ByteString (ByteString)
+import Data.Functor.Identity
 import Data.Maybe (fromMaybe)
 import Data.SOP.BasicFunctors
 import Data.SOP.Constraint
@@ -21,6 +22,7 @@ import Servant.API.ContentTypes
 import Servant.API.UVerb
 import Servant.Server
 import Servant.Server.Internal
+
 
 -- | 'return' for 'UVerb' handlers.  Takes a value of any of the members of the open union,
 -- and will construct a union value in an 'Applicative' (eg. 'Server').
