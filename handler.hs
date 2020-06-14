@@ -216,7 +216,9 @@ tryParsers' status (Comp x :* xs)
 mimeUnrenders
   :: forall contentTypes as . All (AllMimeUnrender contentTypes) as
   => LB.ByteString -> NP ([] :.: Either String) as
-mimeUnrenders body = cpure_NP (Proxy @(AllMimeUnrender contentTypes)) (Comp . map (\(_, parser) -> parser body) . allMimeUnrender $ Proxy @contentTypes)
+mimeUnrenders body = cpure_NP
+  (Proxy @(AllMimeUnrender contentTypes))
+  (Comp . map (\(_, parser) -> parser body) $ allMimeUnrender (Proxy @contentTypes))
 
 instance
   ( RunClient m
