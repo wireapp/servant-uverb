@@ -21,6 +21,7 @@
 import qualified Network.HTTP.Client as Client
 import Control.Concurrent (threadDelay)
 import Data.Typeable
+import Servant.Swagger
 
 -- misc stuff
 import Control.Arrow ((+++), left)
@@ -61,11 +62,6 @@ import Servant.Client
 import Servant.Client.Core (RunClient(..), runRequest, requestMethod, requestAccept)
 import Servant.Server
 import Servant.Server.Internal
-
-
-
-
-
 
 
 -- * Servant.API.Status
@@ -244,6 +240,101 @@ extractUResp :: forall a as. (All Typeable as, Typeable a) => Union as -> Maybe 
 extractUResp = collapse_NS . cmap_NS (Proxy @Typeable) (K . cast . runIdentity)
 
 
+-- * swagger
+--
+
+
+{-
+
+instance (HasSwagger (UVerb 'GET '[JSON] '[WithStatus 201 ArianUser])) where
+
+
+
+instance {-# OVERLAPPABLE #-} (ToSchema a, AllAccept cs, KnownNat status, SwaggerMethod method) => HasSwagger (UVerb method status cs a) where
+  toSwagger _ = toSwagger (Proxy :: Proxy (Verb method status cs (Headers '[] a)))
+
+instance {-# OVERLAPPABLE #-} (ToSchema a, AllAccept cs, AllToResponseHeader hs, KnownNat status, SwaggerMethod method)
+  => HasSwagger (Verb method status cs (Headers hs a)) where
+  toSwagger = mkEndpoint "/"
+
+-- ATTENTION: do not remove this instance!
+-- A similar instance above will always use the more general
+-- polymorphic -- HasSwagger instance and will result in a type error
+-- since 'NoContent' does not have a 'ToSchema' instance.
+instance (AllAccept cs, KnownNat status, SwaggerMethod method) => HasSwagger (Verb method status cs NoContent) where
+  toSwagger _ = toSwagger (Proxy :: Proxy (Verb method status cs (Headers '[] NoContent)))
+
+instance (AllAccept cs, AllToResponseHeader hs, KnownNat status, SwaggerMethod method)
+  => HasSwagger (Verb method status cs (Headers hs NoContent)) where
+  toSwagger = mkEndpointNoContent "/"
+
+instance (SwaggerMethod method) => HasSwagger (NoContentVerb method) where
+  toSwagger =  mkEndpointNoContentVerb "/"
+-}
+
+
+-- | Make a singleton Swagger spec (with only one endpoint).
+-- For endpoints with no content see 'mkEndpointNoContent'.
+mkUEndpoint :: forall a cs hs proxy method status.
+  (ToSchema a, AllAccept cs, AllToResponseHeader hs, SwaggerMethod method, KnownNat status)
+  => FilePath                                       -- ^ Endpoint path.
+  -> proxy (UVerb method cs (Headers hs as))  -- ^ Method, content-types, headers and response.
+  -> Swagger
+mkUEndpoint path proxy
+  = mkEndpointWithSchemaRef (Just ref) path proxy
+      & definitions .~ defs
+  where
+    (defs, ref) = runDeclare (declareSchemaRef (Proxy :: Proxy (Union as))) mempty
+
+-- | Make a singletone 'Swagger' spec (with only one endpoint) and with no content schema.
+mkUEndpointNoContent :: forall nocontent cs hs proxy method status.
+  (AllAccept cs, AllToResponseHeader hs, SwaggerMethod method, KnownNat status)
+  => FilePath                                               -- ^ Endpoint path.
+  -> proxy (Verb method status cs (Headers hs nocontent))  -- ^ Method, content-types, headers and response.
+  -> Swagger
+mkUEndpointNoContent path proxy
+  = mkEndpointWithSchemaRef Nothing path proxy
+
+-- | Like @'mkEndpoint'@ but with explicit schema reference.
+-- Unlike @'mkEndpoint'@ this function does not update @'definitions'@.
+mkUEndpointWithSchemaRef :: forall cs hs proxy method status a.
+  (AllAccept cs, AllToResponseHeader hs, SwaggerMethod method, KnownNat status)
+  => Maybe (Referenced Schema)
+  -> FilePath
+  -> proxy (Verb method status cs (Headers hs a))
+  -> Swagger
+mkUEndpointWithSchemaRef mref path _ = mempty
+  & paths.at path ?~
+    (mempty & method ?~ (mempty
+      & produces ?~ MimeList responseContentTypes
+      & at code ?~ Inline (mempty
+            & schema  .~ mref
+            & headers .~ responseHeaders)))
+  where
+    method               = swaggerMethod (Proxy :: Proxy method)
+    code                 = fromIntegral (natVal (Proxy :: Proxy status))
+    responseContentTypes = allContentType (Proxy :: Proxy cs)
+    responseHeaders      = toAllResponseHeaders (Proxy :: Proxy hs)
+
+mkUEndpointNoContentVerb :: forall proxy method.
+  (SwaggerMethod method)
+  => FilePath                      -- ^ Endpoint path.
+  -> proxy (NoContentVerb method)  -- ^ Method
+  -> Swagger
+mkUEndpointNoContentVerb path _ = mempty
+  & paths.at path ?~
+    (mempty & method ?~ (mempty
+      & at code ?~ Inline mempty))
+  where
+    method               = swaggerMethod (Proxy :: Proxy method)
+    code                 = 204 -- hardcoded in servant-server
+
+
+
+
+
+
+
 -- * example use case
 --
 
@@ -301,5 +392,8 @@ main = do
   print $ collapseUResp (Proxy @Show) show <$> result
   print $ extractUResp @FisxUser <$> result
   print $ extractUResp @(WithStatus 303 String) <$> result
-
+--  print $ toSwagger (Proxy @API)
   pure ()
+
+
+-- TODO: UStream (like 'Stream')
