@@ -1,26 +1,27 @@
 {-# OPTIONS_GHC -Wno-orphans #-}
+
 module Servant.Mock.UVerb () where
 
 import Control.Monad.IO.Class (liftIO)
-import Data.Proxy (Proxy(Proxy))
-import Data.SOP.BasicFunctors ((:.:)(Comp))
-import Data.SOP.Constraint(All, Compose)
+import Data.SOP.BasicFunctors ((:.:) (Comp))
+import Data.SOP.Constraint (All)
 import Data.SOP.NP (cpure_NP)
-import Data.SOP.NS (NS(..), apInjs_NP, sequence'_NS)
-import Servant.API.UVerb
-import Servant.Mock
+import Data.SOP.NS (apInjs_NP, sequence'_NS)
+import Data.Typeable (Proxy (Proxy))
+import Servant.API.UVerb (UVerb, Union)
+import Servant.Mock (HasMock (mock))
 import Servant.Server (HasServer)
-import Servant.Server.UVerb()
-import Test.QuickCheck (Gen, Arbitrary(arbitrary), generate, elements)
+import Servant.Server.UVerb ()
+import Test.QuickCheck (Arbitrary (arbitrary), Gen, elements, generate)
 
-
-arbitraryNS :: forall f xs. All (Arbitrary `Compose` f) xs =>  Gen (NS f xs)
+arbitraryNS :: forall as. All Arbitrary as => Gen (Union as)
 arbitraryNS =
-  sequence'_NS =<< elements (apInjs_NP (cpure_NP (Proxy @(Arbitrary `Compose` f)) (Comp arbitrary)))
-
+  sequence'_NS =<< elements (apInjs_NP (cpure_NP (Proxy @Arbitrary) (Comp arbitrary)))
 
 instance
-  ( All (Compose Arbitrary mkres) resources
-  , HasServer (UVerb mkres method cts resources) ctx
-  ) => HasMock (UVerb mkres method cts resources) ctx where
+  ( All Arbitrary as,
+    HasServer (UVerb method cts as) ctx
+  ) =>
+  HasMock (UVerb method cts as) ctx
+  where
   mock _ _ = liftIO (generate arbitraryNS)
