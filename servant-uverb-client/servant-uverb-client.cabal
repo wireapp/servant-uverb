@@ -1,13 +1,13 @@
 cabal-version:       2.2
 name:                servant-uverb-client
-version:             0.0.1
+version:             0.1
 synopsis:            See README for more info
 description:         See README for more info
-homepage:            https://github.com/wireapp/servant-uverb
-bug-reports:         https://github.com/wireapp/servant-uverb/issues
-license:             AGPL-3.0-only
+homepage:            https://github.com/haskell-servant/servant-uverb
+bug-reports:         https://github.com/haskell-servant/servant-uverb/issues
+license:             BSD3
 license-file:        LICENSE
-author:              Arian van Putten, Matthias Fischmann
+author:              Servant Contributors
 maintainer:          backend@wire.com
 copyright:           (c) 2017 Wire Swiss GmbH
 category:            Web
@@ -17,7 +17,7 @@ tested-with:         GHC == 8.6.4
 
 source-repository head
   type:                git
-  location:            https://github.com/wireapp/servant-uverb.git
+  location:            https://github.com/haskell-servant/servant-uverb.git
 
 common standard-things
   build-depends:       base >= 4.12.0.0 && < 4.14
@@ -62,7 +62,7 @@ common standard-things
 library
   import:              standard-things
   hs-source-dirs:      src
-  build-depends:       servant-uverb == 0.0.1,
+  build-depends:       servant-uverb == 0.1,
                        servant-client-core ^>= 0.16,
                        servant-client ^>= 0.16,
                        servant-server,
